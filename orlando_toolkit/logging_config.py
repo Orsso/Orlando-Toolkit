@@ -1,62 +1,56 @@
 from __future__ import annotations
 
-"""Central logging configuration for Orlando Toolkit.
+"""Logging bootstrap for Orlando Toolkit.
 
-Import and call :func:`setup_logging` at application start-up.
+This module loads the YAML configuration located at
+``orlando_toolkit/config/logging.yaml`` and applies it globally.  Any handler
+``filename`` paths that are relative are rewritten so the log files reside
+under the directory specified by the ``ORLANDO_LOG_DIR`` environment variable
+(default: ``logs``).
+
+The YAML file defines, among others, a dedicated ``structure`` logger with its
+own file handler, ensuring that verbose diagnostics from the Structure tab are
+captured in a separate ``structure.log`` file and do not clutter the main
+application log.
 """
 
+from pathlib import Path
+import importlib.resources as _res
 import logging
-import os
 import logging.config
+import os
+import yaml
 
 __all__ = ["setup_logging"]
 
+_CFG_PKG = "orlando_toolkit.config"
+_CFG_FILE = "logging.yaml"
+
+
+def _load_yaml_config() -> dict:
+    """Return the configuration dictionary embedded in the YAML file."""
+    raw_yaml = _res.read_text(_CFG_PKG, _CFG_FILE)
+    return yaml.safe_load(raw_yaml)  # type: ignore[arg-type]
+
+
+def _rewrite_log_paths(cfg: dict) -> None:
+    """Ensure handler filenames are absolute and land under $ORLANDO_LOG_DIR."""
+    log_dir = Path(os.environ.get("ORLANDO_LOG_DIR", "logs"))
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    for handler in cfg.get("handlers", {}).values():
+        filename = handler.get("filename")
+        if filename and not Path(filename).is_absolute():
+            handler["filename"] = str(log_dir / Path(filename).name)
+
+
 def setup_logging() -> None:
-    """Configure logging for the application using a dictionary configuration."""
-    log_dir = os.environ.get("ORLANDO_LOG_DIR", "logs")
-    os.makedirs(log_dir, exist_ok=True)
-    log_file = os.path.join(log_dir, "app.log")
+    """Install the YAML logging configuration globally.
 
-    LOGGING_CONFIG = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'default': {
-                'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            },
-        },
-        'handlers': {
-            'console': {
-                'class': 'logging.StreamHandler',
-                'formatter': 'default',
-                'level': 'INFO',
-            },
-            'file': {
-                'class': 'logging.handlers.RotatingFileHandler',
-                'formatter': 'default',
-                'filename': log_file,
-                'maxBytes': 1024 * 1024 * 5,  # 5 MB
-                'backupCount': 2,
-                'level': 'DEBUG',
-            },
-        },
-        'loggers': {
-            'orlando_toolkit.core.generators': {
-                'level': 'DEBUG',
-                'handlers': ['file'],
-                'propagate': False,
-            },
-            'PIL': {
-                'level': 'INFO',
-                'handlers': ['file'],
-                'propagate': False,
-            },
-        },
-        'root': {
-            'level': 'INFO',
-            'handlers': ['console', 'file'],
-        },
-    }
-
-    logging.config.dictConfig(LOGGING_CONFIG)
-    logging.info("===== Logging initialised (dictConfig) =====") 
+    Import and call this once near the start of your application's entry point
+    (e.g. in ``run.py``) before any other modules emit log records.
+    """
+    cfg = _load_yaml_config()
+    _rewrite_log_paths(cfg)
+    logging.config.dictConfig(cfg)
+    logging.getLogger(__name__).info("===== Logging initialised (YAML) =====")

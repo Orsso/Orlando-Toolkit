@@ -1,0 +1,71 @@
+# Central logging configuration for Orlando Toolkit
+# -----------------------------------------------------------------------------
+# This YAML file is loaded at application start-up by orlando_toolkit.logging_config.
+# Adjust handler paths / levels here instead of editing code.  All keys follow
+# the schema required by logging.config.dictConfig.
+# -----------------------------------------------------------------------------
+
+version: 1
+# Keep existing loggers alive so third-party libraries honour our handlers.
+disable_existing_loggers: false
+
+formatters:
+  simple:
+    format: "%(levelname)s: %(message)s"
+
+  detailed:
+    format: "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: simple
+    stream: ext://sys.stdout
+
+  file_main:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/app.log        # overridable via ORLANDO_LOG_DIR env-var
+    maxBytes: 5242880             # 5 MB
+    backupCount: 2
+    encoding: utf-8
+
+  file_structure:
+    class: logging.handlers.RotatingFileHandler
+    level: DEBUG
+    formatter: detailed
+    filename: logs/structure_tab.log
+    maxBytes: 2097152            # 2 MB
+    backupCount: 2
+    encoding: utf-8
+
+root:
+  level: INFO
+  handlers: [console, file_main]
+
+loggers:
+  # Core library – keep DEBUG in file, suppress on console via propagate=False
+  orlando_toolkit:
+    level: DEBUG
+    handlers: [file_main]
+    propagate: false
+
+  # High-verbosity channel for StructureTab diagnostics
+  structure:
+    level: DEBUG
+    handlers: [file_structure]
+    propagate: false
+
+  # Module-specific logger for the Structure tab UI
+  orlando_toolkit.ui.structure_tab:
+    level: DEBUG
+    handlers: [file_structure]
+    propagate: false
+
+  PIL:
+    level: INFO
+    handlers: [file_main]
+    propagate: false

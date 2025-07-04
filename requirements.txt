@@ -3,4 +3,5 @@ lxml
 python-docx
 Pillow
 sv-ttk 
+python-json-logger
 pyyaml

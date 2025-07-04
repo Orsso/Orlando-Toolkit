@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Optional
 import copy
+import logging
 import tkinter as tk
 from tkinter import ttk
 from lxml import etree as ET
@@ -17,6 +18,8 @@ from orlando_toolkit.ui.dialogs import CenteredDialog
 
 if False:  # TYPE_CHECKING pragma
     from orlando_toolkit.core.models import DitaContext
+
+log = logging.getLogger(__name__)
 
 __all__ = ["StructureTab"]
 
@@ -65,6 +68,12 @@ class StructureTab(ttk.Frame):
 
         for i, b in enumerate((self._btn_up, self._btn_down, self._btn_left, self._btn_right)):
             b.grid(row=0, column=i, padx=1)
+        # Hidden debug button – revealed via Ctrl+Shift+D
+        self._btn_debug = ttk.Button(toolbar, text="🐞", width=2, command=self._start_debug_trace)
+        self._btn_debug.grid(row=0, column=4, padx=(6, 0))
+        self._btn_debug.grid_remove()
+        # Key chord to reveal the button for power users
+        self.bind_all("<Control-Shift-D>", lambda e: self._btn_debug.grid())
 
         # --- Search bar --------------------------------------------------
         search_frame = ttk.Frame(config_frame)
@@ -108,6 +117,8 @@ class StructureTab(ttk.Frame):
         self.bind_all("<Control-z>", self._undo)
         self.bind_all("<Control-y>", self._redo)
 
+
+
         # Undo/redo stacks
         self._undo_stack: list[bytes] = []
         self._redo_stack: list[bytes] = []
@@ -120,6 +131,14 @@ class StructureTab(ttk.Frame):
 
         # Enable horiz. scrolling with Shift+MouseWheel without a visible scrollbar
         self.tree.configure(yscrollcommand=yscroll.set)
+
+        # ------------------------------------------------------------------
+        # Tooltip for showing style info on hover
+        # ------------------------------------------------------------------
+        from orlando_toolkit.ui.custom_widgets import ToolTip  # local import to avoid cycles
+        self._tooltip = ToolTip(self)
+        self.tree.bind("<Motion>", self._on_tree_hover)
+        self.tree.bind("<Leave>", lambda e: self._tooltip.hide())
 
         def _on_shift_wheel(event):
             self.tree.xview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -135,6 +154,7 @@ class StructureTab(ttk.Frame):
         # Keep reference to the *original* context so we can propagate changes
         self._main_context = context  # Original object owned by main app
 
+        log.debug("Loading context with %d topics", len(context.topics))
         # Deep-copies for safe preview/undo operations
         self._orig_context = copy.deepcopy(context)
         self.context = copy.deepcopy(context)
@@ -163,6 +183,7 @@ class StructureTab(ttk.Frame):
     # ------------------------------------------------------------------
 
     def _rebuild_preview(self):
+        log.debug("Rebuilding preview (depth=%s)", self._depth_var.get())
         self.tree.delete(*self.tree.get_children())
         if self.context is None or self.context.ditamap_root is None:
             return
@@ -214,6 +235,7 @@ class StructureTab(ttk.Frame):
     # ------------------------------------------------------------------
 
     def _on_depth_spin(self):
+        log.debug("Depth spin changed to %s", self._depth_var.get())
         # Live preview of depth change (local, does not trigger re-parse)
         new_depth = int(self._depth_var.get())
         if self.context:
@@ -227,6 +249,7 @@ class StructureTab(ttk.Frame):
             self._maybe_merge_and_refresh()
 
     def _on_merge_toggle(self):
+        log.debug("Realtime merge toggled to %s", bool(self._merge_enabled_var.get()))
         if self.context is None:
             return
         new_val = bool(self._merge_enabled_var.get())
@@ -240,6 +263,7 @@ class StructureTab(ttk.Frame):
         self._maybe_merge_and_refresh()
 
     def _maybe_merge_and_refresh(self):
+        log.debug("Merge/refresh triggered (depth=%s, excluded=%s)", self._depth_var.get(), bool(getattr(self, '_excluded_styles', {})))
         if self.context is None:
             return
 
@@ -341,6 +365,21 @@ class StructureTab(ttk.Frame):
         enabled = len(sel) > 0
         for btn in (self._btn_up, self._btn_down, self._btn_left, self._btn_right):
             btn.config(state="normal" if enabled else "disabled")
+
+    # ------------------------------------------------------------------
+    # Tooltip handlers (moved to class level)
+    # ------------------------------------------------------------------
+    def _on_tree_hover(self, event):
+        """Display tooltip with style name when mouse hovers over a Treeview item."""
+        item_id = self.tree.identify_row(event.y)
+        if not item_id or item_id not in getattr(self, "_item_map", {}):
+            self._tooltip.hide()
+            return
+        tref = self._item_map[item_id]
+        style_name = tref.get("data-style", "Unknown style")
+        level = tref.get("data-level", "?")
+        text = f"Style: {style_name}\nLevel: {level}"
+        self._tooltip.show(text, event.x_root, event.y_root)
 
     def _on_right_click(self, event):
         """Handle right-click context menu on tree items."""
@@ -493,6 +532,7 @@ class StructureTab(ttk.Frame):
         ttk.Button(btn_frame, text="Cancel", command=_do_cancel).pack(side="right")
 
     def _delete_selected_permanently(self, selected_items):
+        log.debug("ui_delete_requested", extra={"event": "ui_delete_requested", "count": len(selected_items)})
         """Permanently delete the specified items."""
         if not selected_items:
             return
@@ -537,6 +577,8 @@ class StructureTab(ttk.Frame):
                 self._edit_journal.append({"op": "delete", "href": href})
 
     def _merge_selected(self):
+        sel_items = list(self.tree.selection())
+        log.debug("ui_merge_requested", extra={"event": "ui_merge_requested", "selection": sel_items})
         """Merge multiple selected topics into the first one."""
         selected = list(self.tree.selection())
         if len(selected) < 2:
@@ -607,6 +649,8 @@ class StructureTab(ttk.Frame):
             for tref in removed_trefs:
                 href = tref.get("href", "")
                 self._edit_journal.append({"op": "merge", "href": href, "target": target_href})
+                # Structured event
+                log.debug("ui_merge", extra={"event": "ui_merge", "src": href, "tgt": target_href})
 
     def _copy_content_with_title(self, source_topic, target_topic):
         """Copy content from source to target topic, preserving source title as emphasized text."""
@@ -652,6 +696,8 @@ class StructureTab(ttk.Frame):
     # ------------------------------------------------------------------
 
     def _move(self, direction: str):
+        sel = list(self.tree.selection())
+        log.debug("ui_move_requested", extra={"event": "ui_move_requested", "direction": direction, "selection": sel})
         def _shift_levels(tref_el: ET.Element, delta: int):
             """Recursively adjust data-level on *tref_el* and its descendants."""
             new_lvl = max(1, int(tref_el.get("data-level", 1)) + delta)
@@ -749,6 +795,7 @@ class StructureTab(ttk.Frame):
             for tref in selected_trefs:
                 href = tref.get("href", "")
                 self._edit_journal.append({"op": "move", "href": href, "dir": direction})
+            log.debug("ui_move", extra={"event": "ui_move", "href": href, "dir": direction})
 
 
 
@@ -885,6 +932,79 @@ class StructureTab(ttk.Frame):
         self.tree.selection_set(target)
         self.tree.focus(target)
         self.tree.see(target)
+
+    # ------------------------------------------------------------------
+    # Debug utilities
+    # ------------------------------------------------------------------
+    def _dump_state(self):
+        """Write a snapshot of key runtime state *and* full structure outline to the logger."""
+        # Basic state summary
+        log.debug(
+            "STATE | depth=%s | excluded_styles=%s | selection=%s | undo=%d | redo=%d",
+            self._depth_var.get(),
+            getattr(self, "_excluded_styles", {}),
+            list(self.tree.selection()),
+            len(self._undo_stack),
+            len(self._redo_stack),
+        )
+
+        # Dump complete outline of the current ditamap
+        if self.context is None or self.context.ditamap_root is None:
+            log.debug("OUTLINE | <no context loaded>")
+            return
+
+        outline_lines: list[str] = []
+
+        def _walk(tref: ET.Element, level: int = 0):
+            nav = tref.find("topicmeta/navtitle")
+            title = nav.text.strip() if nav is not None and nav.text else "(untitled)"
+            outline_lines.append("  " * level + f"- {title}")
+            for child in [el for el in list(tref) if el.tag in ("topicref", "topichead")]:
+                _walk(child, level + 1)
+
+        _walk(self.context.ditamap_root, 0)
+        log.debug("OUTLINE START\n%s\nOUTLINE END", "\n".join(outline_lines))
+        """Write a snapshot of key runtime state to the logger."""
+        log.debug(
+            "STATE | depth=%s | excluded_styles=%s | selection=%s | undo=%d | redo=%d",
+            self._depth_var.get(),
+            getattr(self, "_excluded_styles", {}),
+            list(self.tree.selection()),
+            len(self._undo_stack),
+            len(self._redo_stack),
+        )
+
+    def _start_debug_trace(self):
+        """Attach a temporary rotating file handler capturing DEBUG for all loggers."""
+        import os, datetime, logging, logging.handlers
+
+        log.info("Debug trace button activated by user")
+        log_dir = os.getenv("ORLANDO_LOG_DIR", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        trace_path = os.path.join(log_dir, f"structure_trace_{ts}.log")
+
+        handler = logging.handlers.RotatingFileHandler(
+            trace_path, maxBytes=5 * 1024 * 1024, backupCount=2, encoding="utf-8"
+        )
+        try:
+            from pythonjsonlogger import jsonlogger  # type: ignore
+            handler.setFormatter(jsonlogger.JsonFormatter())
+        except ImportError:
+            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+        handler.setLevel(logging.DEBUG)
+
+        root = logging.getLogger()
+        root.addHandler(handler)
+        root.setLevel(logging.DEBUG)
+
+        # Also attach to this module logger and ensure it emits
+        module_logger = logging.getLogger(__name__)
+        module_logger.addHandler(handler)
+        module_logger.setLevel(logging.DEBUG)
+
+        log.info("==== StructureTab global debug trace started – writing to %s ====", trace_path)
+        self._dump_state()
 
     # ------------------------------------------------------------------
     # Heading filter dialog

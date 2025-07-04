@@ -8,6 +8,52 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 
+# ----------------------------------------------------------------------
+# Generic tooltip helper
+# ----------------------------------------------------------------------
+
+class ToolTip(tk.Toplevel):
+    """A simple tooltip window that appears near the cursor.
+
+    Usage::
+        tip = ToolTip(parent_widget)
+        tip.show("Some text", x_root, y_root)
+        tip.hide()
+
+    The tooltip is *overrideredirect* so it has no window chrome.
+    """
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.withdraw()  # Start hidden
+        self.overrideredirect(True)
+        self.attributes("-topmost", True)
+        self.label = ttk.Label(
+            self,
+            text="",
+            background="#ffffe0",
+            relief="solid",
+            borderwidth=1,
+            padding=(4, 2),
+            justify="left",
+        )
+        self.label.pack()
+
+    # ------------------------------------------------------------------
+    # Public helpers
+    # ------------------------------------------------------------------
+
+    def show(self, text: str, x: int, y: int):
+        """Display *text* at screen coordinates *(x, y)*."""
+        self.label.config(text=text)
+        # Small offset so we don't cover the mouse pointer
+        self.geometry(f"+{x + 20}+{y + 15}")
+        self.deiconify()
+
+    def hide(self):
+        """Hide the tooltip if it is visible."""
+        self.withdraw()
+
 
 class ToggledFrame(tk.Frame):
     """A collapsible container that can show or hide its content."""

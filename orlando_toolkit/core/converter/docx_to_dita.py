@@ -113,6 +113,17 @@ def convert_docx_to_dita(file_path: str, metadata: Dict[str, Any]) -> DitaContex
             parent_elements
         )
 
+        # ------------------------------------------------------------------
+        # Post-processing: collapse singleton sections (section with single
+        # BodyContent module) to avoid redundant nesting like "DIFFUSION →
+        # DIFFUSION" that confuses the GUI and merge logic.
+        # ------------------------------------------------------------------
+        try:
+            from orlando_toolkit.core.merge import _collapse_singleton_sections  # local import to avoid circular deps
+            _collapse_singleton_sections(context.ditamap_root)
+        except Exception as exc:  # pragma: no cover – defensive logging only
+            logger.warning("Post-conversion singleton collapse failed: %s", exc)
+
     except Exception as exc:
         logger.error("Conversion failed: %s", exc, exc_info=True)
         raise

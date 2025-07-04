@@ -22,6 +22,7 @@ __all__ = [
 
 
 BLOCK_LEVEL_TAGS: Set[str] = {
+    # --- block-level DITA elements we copy between topics ---
     "p",
     "ul",
     "ol",
@@ -37,9 +38,7 @@ BLOCK_LEVEL_TAGS: Set[str] = {
 def _copy_content(src_topic: ET.Element, dest_topic: ET.Element) -> None:
     """Append block-level children from *src_topic* into *dest_topic*."""
 
-    dest_body = dest_topic.find("conbody")
-    if dest_body is None:
-        dest_body = ET.SubElement(dest_topic, "conbody")
+    dest_body = _ensure_conbody(dest_topic)
 
     src_body = src_topic.find("conbody")
     if src_body is None:
@@ -132,16 +131,47 @@ def merge_topics_below_depth(ctx: "DitaContext", depth_limit: int) -> None:  # n
                     # -- Merge -------------------------------------------------
                     title_el = topic_el.find("title")
                     if title_el is not None and title_el.text:
-                        clean_title = " ".join(title_el.text.split())
-                        head_p = ET.Element("p", id=generate_dita_id())
-                        head_p.text = clean_title
+                        # Decide destination module among siblings
+                        siblings = list(node)
+                        idx = siblings.index(tref)
+                        dest_ref = _find_merge_target(siblings, idx)
 
-                        parent_body = ancestor_topic_el.find("conbody")
-                        if parent_body is None:
-                            parent_body = ET.SubElement(ancestor_topic_el, "conbody")
-                        parent_body.append(head_p)
-
-                    _copy_content(topic_el, ancestor_topic_el)
+                        if dest_ref is not None:
+                            dest_fname = dest_ref.get("href").split("/")[-1]  # type: ignore
+                            dest_topic = ctx.topics.get(dest_fname)
+                            # Copy heading paragraph
+                            head_p = ET.Element("p", id=generate_dita_id())
+                            head_p.text = title_el.text
+                            if dest_ref is siblings[idx - 1] if idx > 0 else False:
+                                # we are merging *after* dest -> append
+                                dest_body = dest_topic.find("conbody") if dest_topic is not None else None
+                                if dest_body is None and dest_topic is not None:
+                                    dest_body = ET.SubElement(dest_topic, "conbody")
+                                if dest_body is not None:
+                                    dest_body.append(head_p)
+                                _copy_content(topic_el, dest_topic)
+                            else:
+                                # merging before next sibling -> prepend
+                                if dest_topic is not None:
+                                    _prepend_content(topic_el, dest_topic)
+                                    # heading paragraph must be first
+                                    dest_body = dest_topic.find("conbody")
+                                    if dest_body is None:
+                                        dest_body = ET.SubElement(dest_topic, "conbody")
+                                    dest_body.insert(0, head_p)
+                        else:
+                            # Fallback: no sibling module – create / use BodyContent module under section
+                            dest_topic = _ensure_content_module(ctx, node)
+                            dest_body = dest_topic.find("conbody")
+                            if dest_body is None:
+                                dest_body = ET.SubElement(dest_topic, "conbody")
+                            clean_title = " ".join(title_el.text.split())
+                            if clean_title:
+                                heading_p = ET.Element("p", id=generate_dita_id())
+                                heading_p.text = clean_title
+                                dest_body.append(heading_p)
+                            _copy_content(topic_el, dest_topic)
+                            merge_target = dest_topic
 
                     # Recurse so that grandchildren are merged as well (still
                     # targeting the same *ancestor_topic_el*)
@@ -197,13 +227,6 @@ def merge_topics_below_depth(ctx: "DitaContext", depth_limit: int) -> None:  # n
 
     # Mark depth merged so we avoid double processing
     ctx.metadata["merged_depth"] = depth_limit
-
-
-def _clean_title(raw: str | None) -> str:
-    """Normalize *raw* heading text for reliable comparisons."""
-    if not raw:
-        return ""
-    return " ".join(raw.split()).lower()
 
 
 def merge_topics_by_titles(ctx: "DitaContext", exclude_titles: set[str]) -> None:
@@ -336,6 +359,9 @@ def merge_topics_by_levels(ctx: "DitaContext", exclude_levels: set[int]) -> None
     for fname in removed:
         ctx.topics.pop(fname, None)
 
+    # After merging by levels, collapse any sections that now hold a single module
+    _collapse_singleton_sections(ctx.ditamap_root)
+
     ctx.metadata["merged_exclude_levels"] = True
 
 
@@ -370,21 +396,56 @@ def merge_topics_by_styles(ctx: "DitaContext", exclude_map: dict[int, set[str]])
             next_ancestor = topic_el if topic_el is not None else ancestor_topic_el
 
             if t_level in exclude_map and style_name in exclude_map[t_level] and ancestor_topic_el is not None:
-                # Preserve heading title paragraph then merge body content
+                # --- Perform neighbour merge according to project rules ---
                 if topic_el is not None:
-                    title_el = topic_el.find("title")
-                    if title_el is not None and title_el.text:
-                        head_p = ET.Element("p", id=generate_dita_id())
-                        head_p.text = " ".join(title_el.text.split())
-                        parent_body = ancestor_topic_el.find("conbody")
-                        if parent_body is None:
-                            parent_body = ET.SubElement(ancestor_topic_el, "conbody")
-                        parent_body.append(head_p)
+                    # Extract clean title if any
+                    raw_title_el = topic_el.find("title")
+                    clean_title = "" if raw_title_el is None or raw_title_el.text is None else " ".join(raw_title_el.text.split())
 
-                    _copy_content(topic_el, ancestor_topic_el)
+                    # Find best sibling destination within *node*
+                    siblings = list(node)
+                    idx = siblings.index(tref)
+                    dest_ref = _find_merge_target(siblings, idx)
 
-                # Recurse into children
-                _walk(tref, t_level + 1, ancestor_topic_el)
+                    # Initialise merge_target for this iteration
+                    merge_target: ET.Element | None = None
+
+                    if dest_ref is not None:
+                        dest_fname = dest_ref.get("href").split("/")[-1]  # type: ignore
+                        dest_topic = ctx.topics.get(dest_fname)
+                        if dest_topic is not None:
+                            # Create heading paragraph element if needed
+                            if clean_title:
+                                heading_p = ET.Element("p", id=generate_dita_id())
+                                heading_p.text = clean_title
+
+                            # Determine whether we prepend or append
+                            if siblings[idx - 1] is dest_ref if idx > 0 else False:
+                                # dest_ref is previous sibling – append
+                                dest_body = _ensure_conbody(dest_topic)
+                                if clean_title:
+                                    dest_body.append(heading_p)
+                                _copy_content(topic_el, dest_topic)
+                            else:
+                                # dest_ref is next sibling – prepend
+                                _prepend_content(topic_el, dest_topic)
+                                if clean_title:
+                                    dest_body = _ensure_conbody(dest_topic)
+                                    dest_body.insert(0, heading_p)
+                            merge_target = dest_topic
+                    else:
+                        # No suitable sibling – fall back to section BodyContent module
+                        dest_topic = _ensure_content_module(ctx, node)
+                        dest_body = _ensure_conbody(dest_topic)
+                        if clean_title:
+                            heading_p = ET.Element("p", id=generate_dita_id())
+                            heading_p.text = clean_title
+                            dest_body.append(heading_p)
+                        _copy_content(topic_el, dest_topic)
+                        merge_target = dest_topic
+
+                # Recurse into children so grandchildren also land inside the same merge target
+                _walk(tref, t_level + 1, merge_target or ancestor_topic_el)
 
                 node.remove(tref)
                 if fname:
@@ -397,8 +458,104 @@ def merge_topics_by_styles(ctx: "DitaContext", exclude_map: dict[int, set[str]])
     for fname in removed:
         ctx.topics.pop(fname, None)
 
+    # After merging by styles, collapse any sections that now hold a single module
+    _collapse_singleton_sections(ctx.ditamap_root)
+
     ctx.metadata["merged_exclude_styles"] = True
 
+
+
+
+# ---------------------------------------------------------------------------
+# Neighbour merge helpers (internal)
+# ---------------------------------------------------------------------------
+
+def _find_merge_target(siblings: list[ET.Element], idx: int) -> ET.Element | None:
+    """Return best sibling <topicref> to merge into.
+
+    1. Previous sibling with href
+    2. Next sibling with href
+    3. None if not found
+    """
+    # Search to the left
+    for j in range(idx - 1, -1, -1):
+        if siblings[j].get("href"):
+            return siblings[j]
+    # Search to the right
+    for j in range(idx + 1, len(siblings)):
+        if siblings[j].get("href"):
+            return siblings[j]
+    return None
+
+
+def _ensure_conbody(topic_el: ET.Element) -> ET.Element:
+    """Return existing <conbody> or create a new one."""
+    body = topic_el.find("conbody")
+    if body is None:
+        body = ET.SubElement(topic_el, "conbody")
+    return body
+
+
+def _prepend_content(src_topic: ET.Element, dest_topic: ET.Element) -> None:
+    """Prepend src_topic body blocks into dest_topic keeping order."""
+    dest_body = _ensure_conbody(dest_topic)
+    temp = ET.Element("concept")
+    _copy_content(src_topic, temp)  # copies into temp after collecting
+    temp_body = temp.find("conbody")
+    if temp_body is None:
+        return
+    for child in reversed(list(temp_body)):
+        dest_body.insert(0, child)
+
+
+# ---------------------------------------------------------------------------
+# Post-merge cleanup helpers
+# ---------------------------------------------------------------------------
+
+def _collapse_singleton_sections(root: ET.Element | None) -> None:
+    """Remove section topicrefs that now contain exactly one module child.
+
+    The single child is promoted to the section's position, inheriting the
+    section's data-level so overall depth remains consistent.
+    """
+    if root is None:
+        return
+
+    changed = True
+    while changed:
+        changed = False
+        # iterate over a snapshot to allow in-place modification
+        for section in list(root.xpath('.//topicref[not(@href)] | .//topichead')):
+            children = [c for c in section if c.tag in ("topicref", "topichead")]
+            if len(children) != 1:
+                continue
+            child = children[0]
+            # Descend through intermediate empty sections until we hit a module (href) or multi-child section
+            while child is not None and child.get("href") is None:
+                gkids = [c for c in child if c.tag in ("topicref", "topichead")]
+                if len(gkids) != 1:
+                    break
+                child = gkids[0]
+            if child is None or child.get("href") is None:
+                continue
+            parent = section.getparent()
+            if parent is None:
+                continue
+            # Promote child in place of section/head
+            idx = list(parent).index(section)
+            parent.insert(idx, child)
+            # Inherit level attribute if present
+            if section.get("data-level") is not None:
+                child.set("data-level", section.get("data-level"))
+            # Ensure navtitle preserved
+            if child.find("topicmeta/navtitle") is None:
+                navtitle_src = section.find("topicmeta/navtitle")
+                if navtitle_src is not None and navtitle_src.text:
+                    meta = child.find("topicmeta") or ET.SubElement(child, "topicmeta")
+                    nav = ET.SubElement(meta, "navtitle")
+                    nav.text = navtitle_src.text
+            parent.remove(section)
+            changed = True
 
 # ---------------------------------------------------------------------------
 # Helper utilities (internal)

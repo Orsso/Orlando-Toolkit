@@ -22,6 +22,9 @@ from lxml import etree as ET  # type: ignore
 
 from orlando_toolkit.core.models import DitaContext
 from orlando_toolkit.core.utils import generate_dita_id
+
+# Pseudo-style assigned to synthetic module nodes that hold body content
+BODY_CONTENT_STYLE = "BodyContent"
 from orlando_toolkit.core.generators import create_dita_table
 from orlando_toolkit.core.converter.helpers import (
     create_dita_concept,
@@ -228,6 +231,10 @@ def generate_dita_from_structure(
                     "topicref",
                     {"href": f"topics/{module_file}", "locktitle": "yes"},
                 )
+                # Synthetic module sits one level deeper than its section
+                module_topicref.set("data-level", str(level + 1))
+                # Tag synthetic module with pseudo-style so UI can treat it distinctly
+                module_topicref.set("data-style", BODY_CONTENT_STYLE)
                 
                 tm = ET.SubElement(module_topicref, "topicmeta")
                 nt = ET.SubElement(tm, "navtitle")
