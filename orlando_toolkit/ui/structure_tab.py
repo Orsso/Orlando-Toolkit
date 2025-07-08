@@ -34,6 +34,18 @@ class StructureTab(ttk.Frame):
         self._merge_enabled_var = tk.BooleanVar(value=True)
         self._depth_change_callback = depth_change_callback
 
+        # ------------------------------------------------------------------
+        # Clipboard for cut/paste (single selection only)
+        # ------------------------------------------------------------------
+        self._clipboard: ET.Element | None = None
+        self._paste_mode: bool = False
+
+        # ------------------------------------------------------------------
+        # Deprecated move toolbar – attributes kept as None placeholders to
+        # preserve references in legacy methods without functional impact.
+        # ------------------------------------------------------------------
+        self._btn_up = self._btn_down = self._btn_left = self._btn_right = None
+
         # --- UI ---------------------------------------------------------
         config_frame = ttk.LabelFrame(self, text="Topic splitting", padding=15)
         config_frame.pack(fill="x", padx=10, pady=10)
@@ -55,16 +67,7 @@ class StructureTab(ttk.Frame):
         self._progress.grid_remove()
 
         # --- Toolbar for structural editing --------------------------------
-        toolbar = ttk.Frame(config_frame)
-        toolbar.grid(row=0, column=2, padx=(15, 0))
-
-        self._btn_up = ttk.Button(toolbar, text="↑", width=3, command=lambda: self._move("up"))
-        self._btn_down = ttk.Button(toolbar, text="↓", width=3, command=lambda: self._move("down"))
-        self._btn_left = ttk.Button(toolbar, text="◀", width=3, command=lambda: self._move("promote"))
-        self._btn_right = ttk.Button(toolbar, text="▶", width=3, command=lambda: self._move("demote"))
-
-        for i, b in enumerate((self._btn_up, self._btn_down, self._btn_left, self._btn_right)):
-            b.grid(row=0, column=i, padx=1)
+        # (Removed - replaced with cut/paste functionality via context menu)
 
         # --- Search bar --------------------------------------------------
         search_frame = ttk.Frame(config_frame)
@@ -100,17 +103,20 @@ class StructureTab(ttk.Frame):
 
         # Prevent collapsing: re-open any item that tries to close
         self.tree.bind("<<TreeviewClose>>", self._on_close_attempt)
-        self.tree.bind("<<TreeviewSelect>>", self._update_toolbar_state)
         self.tree.bind("<Double-1>", self._on_item_preview)
         self.tree.bind("<Button-3>", self._on_right_click)  # Right-click context menu
+
+        # Visual styles for nodes
+        self.tree.tag_configure("cut", foreground="gray")
+        self.tree.tag_configure("paste_target", background="#e6f2ff")  # Light blue highlight for paste targets
 
         # Global shortcuts for undo/redo
         self.bind_all("<Control-z>", self._undo)
         self.bind_all("<Control-y>", self._redo)
 
         # Undo/redo stacks
-        self._undo_stack: list[bytes] = []
-        self._redo_stack: list[bytes] = []
+        self._undo_stack: list = []
+        self._redo_stack: list = []
 
         # Journal of structural edits so they can be replayed after depth rebuild
         self._edit_journal: list[dict] = []
@@ -120,6 +126,14 @@ class StructureTab(ttk.Frame):
 
         # Enable horiz. scrolling with Shift+MouseWheel without a visible scrollbar
         self.tree.configure(yscrollcommand=yscroll.set)
+
+        # --- Keyboard shortcuts and hover effects ------------------------
+        self.tree.bind("<Control-x>", lambda e: self._cut_selected())
+        self.tree.bind("<Control-v>", lambda e: self._handle_paste_shortcut(e))
+        
+        # Paste target hover effect when an item is cut
+        self.tree.bind("<Motion>", self._on_tree_motion)
+        self.tree.bind("<Leave>", self._on_tree_leave)
 
         def _on_shift_wheel(event):
             self.tree.xview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -262,15 +276,28 @@ class StructureTab(ttk.Frame):
             self._progress.start()
             self.update_idletasks()
 
-            from orlando_toolkit.core.merge import merge_topics_below_depth
-
+            from orlando_toolkit.core.merge import merge_topics_below_depth, merge_topics_by_styles, consolidate_sections
+            
+            # Track whether any merge operation was performed
+            merge_occurred = False
+            
+            # First apply depth filtering if needed
             if self.context.metadata.get("merged_depth") != depth_limit:
                 merge_topics_below_depth(self.context, depth_limit)
+                merge_occurred = True
 
-            # Apply heading exclusions on the fly
+            # Then apply heading exclusions if needed
             if self._excluded_styles and not self.context.metadata.get("merged_exclude_styles"):
-                from orlando_toolkit.core.merge import merge_topics_by_styles
                 merge_topics_by_styles(self.context, self._excluded_styles)
+                merge_occurred = True
+            
+            # Always apply section consolidation after any merge operation
+            # Reset the consolidation flag if we did any merges to ensure it runs
+            if merge_occurred:
+                self.context.metadata.pop("consolidated_sections", None)
+                
+            # Apply consolidation as final step regardless of what other operations were performed
+            consolidate_sections(self.context)
 
             self._progress.stop()
             self._progress.grid_remove()
@@ -279,6 +306,73 @@ class StructureTab(ttk.Frame):
         self._replay_edits()
 
         self._rebuild_preview()
+        
+    def _replay_edits(self):
+        """Replay structural edits from the journal after rebuilding structure.
+        This ensures that cut/paste operations are preserved even after depth changes.
+        """
+        if not hasattr(self, "_edit_journal") or not self._edit_journal:
+            return
+            
+        # Create a map of hrefs to topic elements for efficient lookup
+        href_map = {}
+        
+        # Helper function to build the href map recursively
+        def build_href_map(elem):
+            href = elem.get("href", "")
+            if href:
+                href_map[href] = elem
+            for child in elem:
+                build_href_map(child)
+        
+        # Build the map starting from the root
+        if self.context and hasattr(self.context, "map_xml"):
+            for child in self.context.map_xml:
+                build_href_map(child)
+        
+        # Replay each edit operation
+        for edit in self._edit_journal:
+            op_type = edit.get("op")
+            
+            if op_type == "paste":
+                # Get source and target elements by href
+                source_href = edit.get("href", "")
+                target_href = edit.get("target", "")
+                mode = edit.get("mode", "after")
+                
+                source_elem = href_map.get(source_href)
+                target_elem = href_map.get(target_href)
+                
+                # Skip if we can't find both elements
+                if not source_elem or not target_elem:
+                    continue
+                
+                # Remove source from its current location if it has a parent
+                parent = source_elem.getparent()
+                if parent is not None:
+                    parent.remove(source_elem)
+                
+                # Place according to mode
+                if mode == "after":
+                    # Check if target is a section (has children or is a topichead)
+                    has_children = len(target_elem) > 0
+                    is_section = target_elem.tag == "topichead" or has_children
+                    
+                    if is_section:
+                        # Place at top of section
+                        if len(target_elem) > 0:
+                            target_elem.insert(0, source_elem)
+                        else:
+                            target_elem.append(source_elem)
+                    else:
+                        # Place after as sibling
+                        target_parent = target_elem.getparent()
+                        if target_parent is not None:
+                            index = target_parent.index(target_elem)
+                            target_parent.insert(index + 1, source_elem)
+                        else:
+                            # If no parent, append to root
+                            self.context.map_xml.append(source_elem)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -335,12 +429,9 @@ class StructureTab(ttk.Frame):
         raw_txt.insert("1.0", xml_str)
         raw_txt.yview_moveto(0)
 
-    def _update_toolbar_state(self, event=None):
-        """Enable/disable toolbar buttons based on current selection."""
-        sel = self.tree.selection()
-        enabled = len(sel) > 0
-        for btn in (self._btn_up, self._btn_down, self._btn_left, self._btn_right):
-            btn.config(state="normal" if enabled else "disabled")
+    def _update_toolbar_state(self, event=None):  # noqa: D401
+        """Deprecated toolbar state handler - now a no-op."""
+        return
 
     def _on_right_click(self, event):
         """Handle right-click context menu on tree items."""
@@ -365,18 +456,22 @@ class StructureTab(ttk.Frame):
         
         # Rename option (only for single selection)
         if len(selected_items) == 1:
-            context_menu.add_command(label="Rename", command=self._rename_selected)
+            context_menu.add_command(label="Rename", command=lambda: self._show_status_message("Rename functionality will be implemented in a future update."))
             context_menu.add_separator()
         
-        # Merge option (only if multiple selection and all in same section)
-        if len(selected_items) > 1:
-            if self._can_merge_selection(selected_items):
-                context_menu.add_command(label="Merge Topics", command=self._merge_selected)
-            context_menu.add_separator()
+        # Cut/Paste options for single selection
+        context_menu.add_command(label="Cut", command=self._cut_selected)
+        if self._clipboard is not None:
+            # Show paste option only if clipboard has content
+            paste_menu = tk.Menu(context_menu, tearoff=0)
+            context_menu.add_cascade(label="Paste", menu=paste_menu)
+            paste_menu.add_command(label="After", command=lambda: self._paste_here(item, "after"))
+            
+        context_menu.add_separator()
         
         # Delete option (always available)
         delete_text = "Delete Permanently" if len(selected_items) == 1 else f"Delete {len(selected_items)} Topics"
-        context_menu.add_command(label=delete_text, command=self._delete_selected_with_confirmation)
+        context_menu.add_command(label=delete_text, command=lambda: self._show_status_message("Delete functionality will be implemented in a future update."))
         
         # Show context menu
         try:
@@ -384,480 +479,159 @@ class StructureTab(ttk.Frame):
         finally:
             context_menu.grab_release()
 
-    def _can_merge_selection(self, selected_items):
-        """Check if selected items can be merged (all in same section)."""
-        if len(selected_items) < 2:
+    def _cut_selected(self):
+        """Cut the selected topic."""
+        selected_items = list(self.tree.selection())
+        if len(selected_items) != 1:
+            self._show_status_message("Please select a single topic to cut.")
             return False
         
-        # Get the parent (section) for each selected item
-        parents = set()
-        for item in selected_items:
-            tref = self._item_map.get(item)
-            if tref is None:
-                return False
-            parent = tref.getparent()
-            if parent is None:
-                return False
-            parents.add(parent)
+        self._push_undo_snapshot()
+        item = selected_items[0]
+        self._clipboard = self._item_map.get(item)
+        if self._clipboard is None:
+            self._show_status_message("Error: Unable to find the selected topic.")
+            return False
+            
+        self._paste_mode = True
+        self._edit_journal.append({"op": "cut", "href": self._clipboard.get("href", "")})
         
-        # All items must have the same parent (same section)
-        return len(parents) == 1
+        # Visual indication for cut items
+        self.tree.item(item, tags=("cut",))
+        self._show_status_message("Topic cut. Use Paste to place it in a new location.")
+        return True
 
-    def _rename_selected(self):
-        """Rename the selected topic."""
-        selected = list(self.tree.selection())
-        if len(selected) != 1:
+    def _clear_clipboard(self):
+        """Clear the clipboard state and visual indicators."""
+        if self._clipboard is None:
+            return
+            
+        # Remove visual indication from all items without risking deep recursion
+        visited = set()
+        stack = list(self.tree.get_children(""))
+        while stack:
+            item = stack.pop()
+            if item in visited:
+                continue
+            visited.add(item)
+            current_tags = list(self.tree.item(item, "tags"))
+            if "cut" in current_tags or "paste_target" in current_tags:
+                new_tags = [tag for tag in current_tags if tag not in ("cut", "paste_target")]
+                self.tree.item(item, tags=new_tags if new_tags else ())
+            # Push children onto stack
+            stack.extend(self.tree.get_children(item))
+                
+        self._clipboard = None
+        self._paste_mode = False
+
+    def _paste_here(self, target_item, mode="after"):
+        """Paste previously cut node to the specified target.
+        
+        Args:
+            target_item: The tree item to paste at
+            mode: The paste mode ('after' = as sibling after target)
+                  When target is a section, 'after' will place at top of section.
+        
+        Returns:
+            bool: True if paste was successful, False otherwise
+        """
+        if self._clipboard is None or not self._paste_mode:
+            self._show_status_message("Nothing to paste. Cut a topic first.")
+            return False
+        
+        # Get XML references
+        cut_tref = self._clipboard
+        target_tref = self._item_map.get(target_item)
+        
+        if target_tref is None:
+            self._show_status_message("Invalid paste target.")
+            return False
+        
+        # Validate: can't paste into itself or its descendants
+        if cut_tref is target_tref or target_tref in cut_tref.xpath('.//topicref|.//topichead'):
+            self._show_status_message("Cannot paste a topic into itself or its descendants.")
+            return False
+        
+        # Create undo snapshot before modifying structure
+        self._push_undo_snapshot()
+        
+        # Remove cut node from its current location
+        parent = cut_tref.getparent()
+        if parent is not None:
+            parent.remove(cut_tref)
+        
+        # Paste at target location
+        paste_description = ""  # Will describe where the topic ended up
+        if mode == "child":
+            # Always paste as the first child of the target element
+            target_tref.insert(0, cut_tref)
+            paste_description = "as first child"
+        elif mode == "after":
+            # Check if target is a section (has children)
+            has_children = len(target_tref) > 0
+            is_section = target_tref.tag == "topichead" or has_children
+            
+            if is_section:
+                # Place at top of section (as first child)
+                if len(target_tref) > 0:
+                    # Insert as first child
+                    target_tref.insert(0, cut_tref)
+                else:
+                    # No existing children, just append
+                    target_tref.append(cut_tref)
+                paste_description = "at the top of section"
+            else:
+                # Regular topic - insert after as sibling
+                target_parent = target_tref.getparent()
+                if target_parent is not None:
+                    # Find the index of the target in its parent's children
+                    index = target_parent.index(target_tref)
+                    # Insert the cut topic right after the target
+                    target_parent.insert(index + 1, cut_tref)
+                else:
+                    # If target has no parent (shouldn't happen), just append to root
+                    self.context.map_xml.append(cut_tref)
+                paste_description = "after the target"
+        
+        # Record operation in journal for history replay
+        self._edit_journal.append({
+            "op": "paste",
+            "href": cut_tref.get("href", ""),
+            "target": target_tref.get("href", ""),
+            "mode": mode
+        })
+        
+        # Rebuild the tree view to show the new structure
+        self._rebuild_preview()
+        
+        # Clear the clipboard state
+        self._clear_clipboard()
+        
+        # Fallback description if none was set (should not normally happen)
+        if not paste_description:
+            paste_description = "in the selected location"
+        self._show_status_message(f"Topic pasted successfully {paste_description}.")
+        return True
+
+    def _handle_paste_shortcut(self, event=None):
+        """Handle the Ctrl+V keyboard shortcut for pasting.
+        
+        Will paste after the currently selected item.
+        If multiple items are selected, will paste after the first one.
+        If no selection, shows a message.
+        """
+        if self._clipboard is None:
+            self._show_status_message("Nothing to paste. Cut a topic first.")
             return
         
-        item = selected[0]
-        tref = self._item_map.get(item)
-        if not tref:
-            return
-        
-        # Get current title
-        current_title = self.tree.item(item, "text")
-        
-        # Create rename dialog
-        from orlando_toolkit.ui.dialogs import CenteredDialog
-        dlg = CenteredDialog(self, "Rename Topic", (400, 150), "rename_topic")
-        
-        ttk.Label(dlg, text="Topic title:").pack(anchor="w", padx=10, pady=(10, 5))
-        
-        title_var = tk.StringVar(value=current_title)
-        title_entry = ttk.Entry(dlg, textvariable=title_var, width=50)
-        title_entry.pack(padx=10, pady=5, fill="x")
-        title_entry.select_range(0, tk.END)
-        title_entry.focus()
-        
-        btn_frame = ttk.Frame(dlg)
-        btn_frame.pack(pady=10)
-        
-        def _do_rename():
-            new_title = title_var.get().strip()
-            if new_title and new_title != current_title:
-                # Update the topic title in the XML
-                href = tref.get("href")
-                if href:
-                    topic_filename = href.split("/")[-1]
-                    topic_el = self.context.topics.get(topic_filename)
-                    if topic_el is not None:
-                        title_el = topic_el.find("title")
-                        if title_el is not None:
-                            title_el.text = new_title
-                        
-                        # Rebuild preview to show changes
-                        self._rebuild_preview()
-                        self._restore_selection([tref])
-            dlg.destroy()
-        
-        def _do_cancel():
-            dlg.destroy()
-        
-        ttk.Button(btn_frame, text="OK", command=_do_rename).pack(side="right", padx=5)
-        ttk.Button(btn_frame, text="Cancel", command=_do_cancel).pack(side="right")
-        
-        # Bind Enter key to OK
-        title_entry.bind("<Return>", lambda e: _do_rename())
-
-    def _delete_selected_with_confirmation(self):
-        """Delete selected topics with confirmation dialog."""
-        selected = list(self.tree.selection())
-        if not selected:
-            return
-        
-        # Create confirmation dialog
-        from orlando_toolkit.ui.dialogs import CenteredDialog
-        dlg = CenteredDialog(self, "Delete Confirmation", (400, 200), "delete_confirm")
-        
-        if len(selected) == 1:
-            message = f"Are you sure you want to permanently delete this topic?\n\nThis action cannot be undone."
-        else:
-            message = f"Are you sure you want to permanently delete {len(selected)} topics?\n\nThis action cannot be undone."
-        
-        ttk.Label(dlg, text=message, wraplength=350, justify="center").pack(padx=20, pady=20)
-        
-        btn_frame = ttk.Frame(dlg)
-        btn_frame.pack(pady=10)
-        
-        def _do_delete():
-            dlg.destroy()
-            self._delete_selected_permanently(selected)
-        
-        def _do_cancel():
-            dlg.destroy()
-        
-        # Make delete button red/warning style
-        delete_btn = ttk.Button(btn_frame, text="Delete Permanently", command=_do_delete)
-        delete_btn.pack(side="right", padx=5)
-        
-        ttk.Button(btn_frame, text="Cancel", command=_do_cancel).pack(side="right")
-
-    def _delete_selected_permanently(self, selected_items):
-        """Permanently delete the specified items."""
+        selected_items = list(self.tree.selection())
         if not selected_items:
+            self._show_status_message("Select a target topic to paste after first.")
             return
         
-        # Snapshot for undo
-        self._push_undo_snapshot()
-        
-        removed_trefs = []
-        changed = False
-        
-        # Process in reverse order to avoid index shifting
-        for item in reversed(selected_items):
-            tref = self._item_map.get(item)
-            if tref is None:
-                continue
-            parent = tref.getparent()
-            if parent is None:
-                continue
-            
-            # Remove from ditamap
-            parent.remove(tref)
-            removed_trefs.append(tref)
-            changed = True
-            
-            # Remove from topics if it has an href
-            href = tref.get("href")
-            if href:
-                topic_filename = href.split("/")[-1]
-                self.context.topics.pop(topic_filename, None)
-        
-        if changed:
-            # Keep pristine context in sync
-            if hasattr(self, "_orig_context") and self._orig_context:
-                import copy as _cpy
-                self._orig_context.ditamap_root = _cpy.deepcopy(self.context.ditamap_root)
-            
-            self._rebuild_preview()
-            
-            # Record deletions in journal
-            for tref in removed_trefs:
-                href = tref.get("href", "")
-                self._edit_journal.append({"op": "delete", "href": href})
-
-    def _merge_selected(self):
-        """Merge multiple selected topics into the first one."""
-        selected = list(self.tree.selection())
-        if len(selected) < 2:
-            return
-        
-        # Verify all are in same section
-        if not self._can_merge_selection(selected):
-            return
-        
-        # Snapshot for undo
-        self._push_undo_snapshot()
-        
-        # Get topic references in selection order
-        selected_trefs = []
-        for item in selected:
-            tref = self._item_map.get(item)
-            if tref is not None:
-                selected_trefs.append(tref)
-        
-        if len(selected_trefs) < 2:
-            return
-        
-        # First topic becomes the target
-        target_tref = selected_trefs[0]
-        target_href = target_tref.get("href")
-        if not target_href:
-            return
-        
-        target_filename = target_href.split("/")[-1]
-        target_topic = self.context.topics.get(target_filename)
-        if target_topic is None:
-            return
-        
-        # Merge each subsequent topic into the target
-        removed_trefs = []
-        for source_tref in selected_trefs[1:]:
-            source_href = source_tref.get("href")
-            if not source_href:
-                continue
-            
-            source_filename = source_href.split("/")[-1]
-            source_topic = self.context.topics.get(source_filename)
-            if source_topic is None:
-                continue
-            
-            # Copy content with title preservation (Option B format)
-            self._copy_content_with_title(source_topic, target_topic)
-            
-            # Remove source topic from ditamap
-            parent = source_tref.getparent()
-            if parent is not None:
-                parent.remove(source_tref)
-                removed_trefs.append(source_tref)
-            
-            # Remove source topic from context
-            self.context.topics.pop(source_filename, None)
-        
-        if removed_trefs:
-            # Keep pristine context in sync
-            if hasattr(self, "_orig_context") and self._orig_context:
-                import copy as _cpy
-                self._orig_context.ditamap_root = _cpy.deepcopy(self.context.ditamap_root)
-            
-            self._rebuild_preview()
-            self._restore_selection([target_tref])
-            
-            # Record merges in journal
-            for tref in removed_trefs:
-                href = tref.get("href", "")
-                self._edit_journal.append({"op": "merge", "href": href, "target": target_href})
-
-    def _copy_content_with_title(self, source_topic, target_topic):
-        """Copy content from source to target topic, preserving source title as emphasized text."""
-        from orlando_toolkit.core.utils import generate_dita_id
-        
-        # Get target body
-        target_body = target_topic.find("conbody")
-        if target_body is None:
-            target_body = ET.SubElement(target_topic, "conbody")
-        
-        # Get source title and body
-        source_title_el = source_topic.find("title")
-        source_body = source_topic.find("conbody")
-        
-        # Add source title as emphasized text (Option B format)
-        if source_title_el is not None and source_title_el.text:
-            title_p = ET.Element("p", id=generate_dita_id())
-            title_b = ET.SubElement(title_p, "b")
-            title_b.text = source_title_el.text.strip()
-            target_body.append(title_p)
-        
-        # Copy all content from source body
-        if source_body is not None:
-            from orlando_toolkit.core.merge import BLOCK_LEVEL_TAGS
-            from copy import deepcopy
-            
-            for child in list(source_body):
-                if child.tag in BLOCK_LEVEL_TAGS:
-                    # Deep copy and ensure unique IDs
-                    new_child = deepcopy(child)
-                    
-                    # Regenerate IDs to avoid duplicates
-                    if "id" in new_child.attrib:
-                        new_child.set("id", generate_dita_id())
-                    
-                    for el in new_child.xpath('.//*[@id]'):
-                        el.set("id", generate_dita_id())
-                    
-                    target_body.append(new_child)
-
-    # ------------------------------------------------------------------
-    # Structural mutations
-    # ------------------------------------------------------------------
-
-    def _move(self, direction: str):
-        def _shift_levels(tref_el: ET.Element, delta: int):
-            """Recursively adjust data-level on *tref_el* and its descendants."""
-            new_lvl = max(1, int(tref_el.get("data-level", 1)) + delta)
-            tref_el.set("data-level", str(new_lvl))
-            for child in tref_el.xpath('.//topicref|.//topichead'):
-                _shift_levels(child, delta)
-
-        selected = list(self.tree.selection())
-        if not selected:
-            return
-
-        # Snapshot for undo
-        self._push_undo_snapshot()
-
-        changed = False
-        selected_trefs: list[ET.Element] = []
-
-        # Build groups of contiguous selections per parent
-        by_parent: dict[ET.Element, list[tuple[int, ET.Element]]] = {}
-        for sel in selected:
-            tref = self._item_map.get(sel)
-            if tref is None or tref.getparent() is None:
-                continue
-            parent = tref.getparent()
-            idx = list(parent).index(tref)
-            by_parent.setdefault(parent, []).append((idx, tref))
-
-        # Process each parent group separately
-        for parent, items in by_parent.items():
-            # Sort by index (visual order within parent)
-            items.sort(key=lambda t: t[0])
-
-            if direction in ("up", "promote"):
-                forward_iter = items
-            else:  # down/demote process from bottom to top
-                forward_iter = list(reversed(items))
-
-            if direction in ("up", "down"):
-                for idx, tref in forward_iter:
-                    sibs = list(parent)
-                    cur_idx = sibs.index(tref)
-                    if direction == "up" and cur_idx > 0:
-                        parent.remove(tref)
-                        parent.insert(cur_idx - 1, tref)
-                        changed = True
-                        selected_trefs.append(tref)
-                    elif direction == "down" and cur_idx < len(sibs) - 1:
-                        parent.remove(tref)
-                        parent.insert(cur_idx + 1, tref)
-                        changed = True
-                        selected_trefs.append(tref)
-            elif direction == "promote":
-                grand = parent.getparent()
-                if grand is None:
-                    continue
-                insert_pos = list(grand).index(parent) + 1
-                for _, tref in forward_iter:
-                    parent.remove(tref)
-                    grand.insert(insert_pos, tref)
-                    insert_pos += 1
-                    changed = True
-                    selected_trefs.append(tref)
-                    _shift_levels(tref, -1)
-            elif direction == "demote":
-                # Use the left sibling of the *first* item as new parent
-                first_idx, tref_sample = items[0]
-                # Abort when no left sibling exists (cannot demote)
-                if first_idx == 0:
-                    continue
-
-                # Abort if new level would exceed current depth preview
-                cur_level = int(tref_sample.get("data-level", 1))
-                max_depth = int(self._depth_var.get())
-                if cur_level + 1 > max_depth:
-                    continue
-
-                anchor = list(parent)[first_idx - 1]
-                for _, tref in items:  # append in original visual order
-                    parent.remove(tref)
-                    anchor.append(tref)
-                    changed = True
-                    selected_trefs.append(tref)
-                    _shift_levels(tref, +1)
-
-        if changed:
-            # Keep pristine context in sync so heading cache rebuild sees nodes
-            if hasattr(self, "_orig_context") and self._orig_context:
-                import copy as _cpy
-                self._orig_context.ditamap_root = _cpy.deepcopy(self.context.ditamap_root)
-
-            self._rebuild_preview()
-            self._restore_selection(selected_trefs)
-
-            # Record move in journal
-            for tref in selected_trefs:
-                href = tref.get("href", "")
-                self._edit_journal.append({"op": "move", "href": href, "dir": direction})
-
-
-
-    # ------------------------------------------------------------------
-    # Undo / Redo helpers
-    # ------------------------------------------------------------------
-
-    def _snapshot(self) -> bytes:
-        """Serialize current ditamap for undo/redo."""
-        if self.context and self.context.ditamap_root is not None:
-            from lxml import etree as _ET
-            return _ET.tostring(self.context.ditamap_root)
-        return b""
-
-    def _push_undo_snapshot(self):
-        snap = self._snapshot()
-        if snap:
-            self._undo_stack.append(snap)
-            self._redo_stack.clear()
-
-    def _undo(self, event=None):
-        if not self._undo_stack:
-            return "break"
-        snap = self._undo_stack.pop()
-        if snap:
-            # Push current to redo
-            current = self._snapshot()
-            if current:
-                self._redo_stack.append(current)
-            self._restore_snapshot(snap)
-        return "break"
-
-    def _redo(self, event=None):
-        if not self._redo_stack:
-            return "break"
-        snap = self._redo_stack.pop()
-        if snap:
-            current = self._snapshot()
-            if current:
-                self._undo_stack.append(current)
-            self._restore_snapshot(snap)
-        return "break"
-
-    def _restore_snapshot(self, snap: bytes):
-        from lxml import etree as _ET
-        try:
-            new_root = _ET.fromstring(snap)
-        except Exception:
-            return
-        if self.context:
-            self.context.ditamap_root = new_root
-            self._rebuild_preview()
-
-    def _restore_selection(self, tref_list):
-        # Reselect items corresponding to trefs after rebuild
-        sel_items = []
-        for item, tref in self._item_map.items():
-            if tref in tref_list:
-                sel_items.append(item)
-        self.tree.selection_set(sel_items)
-        if sel_items:
-            self.tree.focus(sel_items[0])
-
-    # ------------------------------------------------------------------
-    # Journal replay helpers
-    # ------------------------------------------------------------------
-
-    def _find_tref_by_href(self, root: ET.Element, href: str):
-        if not href:
-            return None
-        return root.xpath(f'.//topicref[@href="{href}"]')
-
-    def _replay_edits(self):
-        if self.context is None or self.context.ditamap_root is None:
-            return
-        root = self.context.ditamap_root
-        for rec in self._edit_journal:
-            op = rec.get("op")
-            href = rec.get("href", "")
-            matches = self._find_tref_by_href(root, href)
-            if not matches:
-                continue
-            tref = matches[0]
-            if op == "delete":
-                parent = tref.getparent()
-                if parent is not None:
-                    parent.remove(tref)
-            elif op == "move":
-                direction = rec.get("dir")
-                parent = tref.getparent()
-                if parent is None:
-                    continue
-                siblings = list(parent)
-                idx = siblings.index(tref)
-                if direction == "up" and idx > 0:
-                    parent.remove(tref)
-                    parent.insert(idx - 1, tref)
-                elif direction == "down" and idx < len(siblings) - 1:
-                    parent.remove(tref)
-                    parent.insert(idx + 1, tref)
-                elif direction == "promote" and parent.tag == "topicref":
-                    grand = parent.getparent()
-                    if grand is not None:
-                        pidx = list(grand).index(parent)
-                        parent.remove(tref)
-                        grand.insert(pidx + 1, tref)
-                elif direction == "demote" and idx > 0:
-                    left = siblings[idx - 1]
-                    left.append(tref)
+        # Use first selected item as target
+        target_item = selected_items[0]
+        self._paste_here(target_item, mode="after")
 
     # ------------------------------------------------------------------
     # Search helpers
@@ -885,7 +659,7 @@ class StructureTab(ttk.Frame):
         self.tree.selection_set(target)
         self.tree.focus(target)
         self.tree.see(target)
-
+    
     # ------------------------------------------------------------------
     # Heading filter dialog
     # ------------------------------------------------------------------
@@ -1011,3 +785,145 @@ class StructureTab(ttk.Frame):
         for ctx in (getattr(self, "_orig_context", None), getattr(self, "_main_context", None)):
             if ctx:
                 ctx.metadata[key] = value 
+
+    # ------------------------------------------------------------------
+    # Status message helper
+    # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # Paste hover visualization helpers
+    # ------------------------------------------------------------------
+    
+    def _on_tree_motion(self, event):
+        """Handle mouse motion over the tree to highlight valid paste targets.
+        Only activates when an item is currently cut (clipboard has content).
+        """
+        if self._clipboard is None:
+            return
+            
+        # Identify item under cursor
+        item = self.tree.identify_row(event.y)
+        if item == "":
+            self._clear_paste_target_highlights()
+            return
+            
+        # Verify it's a valid paste target
+        target_tref = self._item_map.get(item)
+        if target_tref is None:
+            self._clear_paste_target_highlights()
+            return
+            
+        # Check if it's a valid target (not the cut item or its descendant)
+        cut_tref = self._clipboard
+        
+        # Check for valid paste target
+        if (cut_tref is target_tref or 
+            target_tref in cut_tref.xpath('.//topicref|.//topichead')):
+            self._clear_paste_target_highlights()
+            return
+            
+        # Apply highlight to target
+        self._clear_paste_target_highlights()
+        current_tags = list(self.tree.item(item, "tags"))
+        if "paste_target" not in current_tags:
+            current_tags.append("paste_target")
+            self.tree.item(item, tags=tuple(current_tags))
+    
+    def _on_tree_leave(self, event):
+        """Handle mouse leaving the tree area."""
+        self._clear_paste_target_highlights()
+    
+    def _clear_paste_target_highlights(self):
+        """Remove all paste target highlights from the tree."""
+        def clear_tags_recursive(item):
+            children = self.tree.get_children(item)
+            for child in children:
+                current_tags = list(self.tree.item(child, "tags"))
+                if "paste_target" in current_tags:
+                    new_tags = [tag for tag in current_tags if tag != "paste_target"]
+                    self.tree.item(child, tags=tuple(new_tags) if new_tags else ())
+                clear_tags_recursive(child)
+        
+        # Start with root items
+        clear_tags_recursive("")
+    
+    # ------------------------------------------------------------------
+    # Undo/redo functionality
+    # ------------------------------------------------------------------
+    
+    def _push_undo_snapshot(self):
+        """Take a snapshot of the current state for undo/redo."""
+        if not hasattr(self, "context") or self.context is None:
+            return
+            
+        # Make a deep copy of the current XML structure
+        if hasattr(self.context, "map_xml") and self.context.map_xml is not None:
+            snapshot = copy.deepcopy(self.context.map_xml)
+            self._undo_stack.append(snapshot)
+            self._redo_stack.clear()  # Clear redo stack when a new action is taken
+    
+    def _undo(self, event=None):
+        """Restore previous state from the undo stack."""
+        if not self._undo_stack:
+            self._show_status_message("Nothing to undo.")
+            return
+            
+        # Save current state to redo stack
+        if hasattr(self.context, "map_xml") and self.context.map_xml is not None:
+            current = copy.deepcopy(self.context.map_xml)
+            self._redo_stack.append(current)
+            
+            # Restore previous state
+            previous = self._undo_stack.pop()
+            self.context.map_xml = previous
+            self._rebuild_preview()
+            self._show_status_message("Undo successful.")
+    
+    def _redo(self, event=None):
+        """Restore next state from the redo stack."""
+        if not self._redo_stack:
+            self._show_status_message("Nothing to redo.")
+            return
+            
+        # Save current state to undo stack
+        if hasattr(self.context, "map_xml") and self.context.map_xml is not None:
+            current = copy.deepcopy(self.context.map_xml)
+            self._undo_stack.append(current)
+            
+            # Restore next state
+            next_state = self._redo_stack.pop()
+            self.context.map_xml = next_state
+            self._rebuild_preview()
+            self._show_status_message("Redo successful.")
+    
+    # ------------------------------------------------------------------
+    # Status message helper
+    # ------------------------------------------------------------------
+
+    def _show_status_message(self, message, duration=3000):
+        """Display a temporary status message to the user.
+        
+        Args:
+            message (str): Message to display
+            duration (int): Duration in milliseconds before auto-dismissing
+        """
+        if hasattr(self, "_status_message_id") and self._status_message_id:
+            self.after_cancel(self._status_message_id)
+            self._status_message_id = None
+            
+        # Create status bar if it doesn't exist
+        if not hasattr(self, "_status_label") or not self._status_label:
+            self._status_label = ttk.Label(self, text="", anchor="w", background="#f0f0f0", relief="sunken")
+            self._status_label.pack(side="bottom", fill="x", padx=5, pady=(0, 5))
+        
+        # Show message
+        self._status_label.config(text=message)
+        self._status_label.update_idletasks()
+        
+        # Schedule auto-dismiss
+        def _clear_status():
+            if hasattr(self, "_status_label") and self._status_label:
+                self._status_label.config(text="")
+            self._status_message_id = None
+            
+        self._status_message_id = self.after(duration, _clear_status)

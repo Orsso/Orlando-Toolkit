@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+	<public publicId="-//OASIS//ENTITIES Orlando Action Domain//EN" uri="dtd/orl-act-d.ent"/>
+	<public publicId="-//OASIS//ELEMENTS Orlando Action Domain//EN" uri="dtd/orl-act-d.mod"/>
+	<public publicId="-//OASIS//ENTITIES Orlando Compliance Domain//EN" uri="dtd/orl-comp-d.ent"/>
+	<public publicId="-//OASIS//ELEMENTS Orlando Compliance Domain//EN" uri="dtd/orl-comp-d.mod"/>
+</catalog>

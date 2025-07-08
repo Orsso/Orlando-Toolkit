@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ============================================================= -->
+<!--                    HEADER                                     -->
+<!-- ============================================================= -->
+<!--  MODULE:    Orlando Action Domain                            -->
+<!--  VERSION:   1.3                                               -->
+<!--  DATE:      March 2021                                        -->
+<!--                                                               -->
+<!-- ============================================================= -->
+<!-- ============================================================= -->
+<!--                    PUBLIC DOCUMENT TYPE DEFINITION            -->
+<!--                    TYPICAL INVOCATION                         -->
+<!--                                                               -->
+<!--  Refer to this file by the following public identifier or an  -->
+<!--       appropriate system identifier                           -->
+<!-- PUBLIC "-//OASIS//ENTITIES Orlando Action Domain//EN"         -->
+<!--       Delivered as file "sp-act-d.ent"                        -->
+<!-- ============================================================= -->
+<!-- SYSTEM:     Darwin Information Typing Architecture (DITA)     -->
+<!--                                                               -->
+<!-- PURPOSE:    Declaring the elements and specialization         -->
+<!--             attributes for the Act Domain                     -->
+<!--                                                               -->
+<!-- ORIGINAL CREATION DATE:                                       -->
+<!--             March 2021                                        -->
+<!--                                                               -->
+<!--             (C) Copyright 2021, Orlando Corp.                    -->
+<!--             All Rights Reserved.                              -->
+<!--  AUTHOR:    Glenn Emerson, gemerson@Orlando.com              -->
+<!--                                                               -->
+<!--  UPDATES: 2021.03.05 Creation date                            -->
+<!--           2021.03.12 Changed act to action                    -->
+<!-- ============================================================= -->
+<!--                                                               -->
+
+<!-- ============================================================= -->
+<!--                    ELEMENT EXTENSION ENTITY DECLARATIONS      -->
+<!-- ============================================================= -->
+
+<!ENTITY % act-d-p
+  "action"
+>
+
+<!-- ============================================================= -->
+<!--                    DOMAIN ENTITY DECLARATION                  -->
+<!-- ============================================================= -->
+
+<!ENTITY act-d-att
+  "(topic act-d)"
+>
+
+<!-- ================ End DITA Abbreviated Form Domain ================== -->
+ 

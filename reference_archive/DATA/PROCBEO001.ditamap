@@ -1,0 +1,511 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE map
+  PUBLIC "-//OASIS//DTD DITA Map//EN" "./dtd/technicalContent/dtd/map.dtd">
+<map xml:lang="en-US">
+  <title>Manuel d’administration EFB</title>
+    <topicmeta>
+      <critdates>
+        <created date="2025-05-28" />
+        <revised modified="2025-05-28" />
+      </critdates>
+      <othermeta name="manualCode" content="PROCBEO001"/>
+        <othermeta name="manual_reference" content="PROC-BEO-001"/>
+        <othermeta name="revNumber" content="0.0"/>
+        <othermeta name="isRevNumberNull" content="true"/>
+    </topicmeta>
+    <topichead>
+        <topicmeta>
+            <navtitle  
+>CONTROLE DU DOCUMENT</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="1"/>
+        </topicmeta>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008590.dita">
+        <topicmeta>
+            <navtitle  
+>OBJECTIFS</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="1.1"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008592.dita">
+        <topicmeta>
+            <navtitle  
+>DOMAINE D&apos;APPLICATION</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="1.2"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008593.dita">
+        <topicmeta>
+            <navtitle  
+>DOCUMENTS DE REFERENCES ET ANNEXES</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="1.3"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008594.dita">
+        <topicmeta>
+            <navtitle  
+>APPROBATIONS</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-06-23" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="1.4"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008595.dita">
+        <topicmeta>
+            <navtitle  
+>RESPONSABILITES ET AUTORITES</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="1.5"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008596.dita">
+        <topicmeta>
+            <navtitle  
+>DIFFUSION</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="1.6"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+    </topichead>
+    <topichead>
+        <topicmeta>
+            <navtitle  
+>POLITIQUES D&apos;UTILISATION DE L&apos;EFB</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="2"/>
+        </topicmeta>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008597.dita">
+        <topicmeta>
+            <navtitle  
+>PRÉSENTATION EFB</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="2.1"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008598.dita">
+        <topicmeta>
+            <navtitle  
+>CADRE D&apos;UTILISATION</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="2.2"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008599.dita">
+        <topicmeta>
+            <navtitle  
+>PARAMÉTRAGE SOFTWARE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="2.3"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008600.dita">
+        <topicmeta>
+            <navtitle  
+>ADMINISTRATION HARDWARE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="2.4"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008601.dita">
+        <topicmeta>
+            <navtitle  
+>CONFIGURATION GÉNÉRALE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-06-02" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="2.5"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008602.dita">
+        <topicmeta>
+            <navtitle  
+>MODIFICATIONS DES APPLICATIONS METIER</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="2.6"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008603.dita">
+        <topicmeta>
+            <navtitle  
+>PARAMÉTRAGE WIFI FOMAX</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="2.7"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+    </topichead>
+    <topichead>
+        <topicmeta>
+            <navtitle  
+>POLITIQUES D&apos;UTILISATION IPAD PNT</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="3"/>
+        </topicmeta>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008604.dita">
+        <topicmeta>
+            <navtitle  
+>PRÉSENTATION IPAD PNT</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="3.1"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008605.dita">
+        <topicmeta>
+            <navtitle  
+>CADRE D&apos;UTILISATION DE L&apos;IPAD</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="3.2"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008606.dita">
+        <topicmeta>
+            <navtitle  
+>PARAMÉTRAGE SOFTWARE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="3.3"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008841.dita">
+        <topicmeta>
+            <navtitle  
+>ADMINISTRATION HARDWARE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-06-02" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="3.4"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008608.dita">
+        <topicmeta>
+            <navtitle  
+>MODIFICATIONS DES APPLICATIONS METIER</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-06-02" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="3.5"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+    </topichead>
+    <topichead>
+        <topicmeta>
+            <navtitle  
+>INVENTAIRES DES APPLICATIONS METIER</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="4"/>
+        </topicmeta>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008609.dita">
+        <topicmeta>
+            <navtitle  
+>APPLICATIONS AUTORISÉES</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="4.1"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008610.dita">
+        <topicmeta>
+            <navtitle  
+>FLYSMART WITH AIRBUS (SUR IPAD)</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="4.2"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008611.dita">
+        <topicmeta>
+            <navtitle  
+>LIDO MPILOT</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="4.3"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008612.dita">
+        <topicmeta>
+            <navtitle  
+>MISSION +</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="4.4"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008613.dita">
+        <topicmeta>
+            <navtitle  
+>GOODREADER</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="4.5"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008614.dita">
+        <topicmeta>
+            <navtitle  
+>EWAS</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="4.6"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+    </topichead>
+    <topichead>
+        <topicmeta>
+            <navtitle  
+>SUIVI HARDWARE EFB</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="5"/>
+        </topicmeta>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008615.dita">
+        <topicmeta>
+            <navtitle  
+>DÉTÉCTION &amp; ALERTE DE PANNE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="5.1"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008616.dita">
+        <topicmeta>
+            <navtitle  
+>TRAITEMENT DE LA PANNE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="5.2"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008617.dita">
+        <topicmeta>
+            <navtitle  
+>NETTOYAGE &amp; ENTRETIEN DES EFB</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="5.3"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008618.dita">
+        <topicmeta>
+            <navtitle  
+>PROBLÈME HARDWARE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="5.4"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008619.dita">
+        <topicmeta>
+            <navtitle  
+>PROBLÈME SOFTWARE</navtitle>
+        <critdates>
+            <created date="2025-05-28" />
+            <revised modified="2025-05-28" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="5.5"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+    </topichead>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008845.dita">
+        <topicmeta>
+            <navtitle  
+>ANN.1. FICHE DE SUIVI MISE A JOUR EFB</navtitle>
+        <critdates>
+            <created date="2025-05-30" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="6"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+      <topicref locktitle="yes" href="topics/_SVC-BEOPS.PROCBEO001.dita_orl008846.dita">
+        <topicmeta>
+            <navtitle  
+>ANN.2. CATALOGUE CORSAIR</navtitle>
+        <critdates>
+            <created date="2025-05-30" />
+            <revised modified="2025-05-30" />
+        </critdates>
+            <metadata/>
+              <othermeta name="tocIndex" content="7"/>
+                <othermeta name="foldout" content="false" />
+                <othermeta name="tdm" content="false" />
+        </topicmeta>
+      </topicref>
+</map>
+
