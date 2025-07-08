@@ -54,39 +54,29 @@ class ConversionService:
         depth_limit = int(context.metadata.get("topic_depth", 3))
 
         # ----------------------------------------------------------------
-        # 1) Merge deeper topics when not already done (realtime toggle off)
+        # 1) Apply structure rules (merge + consolidate) via StructureService
         # ----------------------------------------------------------------
-        from orlando_toolkit.core.merge import (
-            merge_topics_below_depth,
-            merge_topics_by_titles,
-            merge_topics_by_levels,
-            merge_topics_by_styles,
-        )
+        from orlando_toolkit.core.services.structure_service import StructureService
+        from orlando_toolkit.core.services.structure_models import StructureRules
 
-        if context.metadata.get("merged_depth") != depth_limit:
-            merge_topics_below_depth(context, depth_limit)
+        svc = StructureService()
 
-        # Heading style exclusions (e.g., exclude 'Heading 2')
-        excl_lvls = set(context.metadata.get("exclude_styles", []))
-        if excl_lvls and not context.metadata.get("merged_exclude_levels"):
-            merge_topics_by_levels(context, {int(l) for l in excl_lvls})
-
-        # (Legacy title-based exclusions kept for compatibility)
-        exclude_titles = set(context.metadata.get("exclude_headings", []))
-        if exclude_titles and not context.metadata.get("merged_exclude"):
-            merge_topics_by_titles(context, exclude_titles)
-
-        # Fine-grain style exclusions per level
+        # Build excluded style map from metadata (level -> set[str])
         style_excl_map: dict[int, set[str]] = {}
         for key, val in context.metadata.get("exclude_style_map", {}).items():
             try:
                 lvl = int(key)
-                style_excl_map.setdefault(lvl, set()).update(val)
+                style_excl_map[lvl] = set(val)
             except ValueError:
                 continue
 
-        if style_excl_map and not context.metadata.get("merged_exclude_styles"):
-            merge_topics_by_styles(context, style_excl_map)
+        rules = StructureRules(
+            max_depth=depth_limit,
+            excluded_styles=style_excl_map,
+            consolidate_sections=True,
+        )
+
+        context = svc.apply_rules(context, rules)
 
         # ---------------------------------------------------------------
         # 2) Prune now-empty topicrefs below depth_limit (structure only)
@@ -161,7 +151,7 @@ class ConversionService:
         return Path(output_zip)
 
     # ------------------------------------------------------------------
-    # XML preview helper (Phase-10)
+    # XML preview helper
     # ------------------------------------------------------------------
 
     def compile_preview(self, context: DitaContext, tref_element) -> str:  # noqa: D401

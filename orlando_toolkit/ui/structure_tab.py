@@ -276,28 +276,19 @@ class StructureTab(ttk.Frame):
             self._progress.start()
             self.update_idletasks()
 
-            from orlando_toolkit.core.merge import merge_topics_below_depth, merge_topics_by_styles, consolidate_sections
-            
-            # Track whether any merge operation was performed
-            merge_occurred = False
-            
-            # First apply depth filtering if needed
-            if self.context.metadata.get("merged_depth") != depth_limit:
-                merge_topics_below_depth(self.context, depth_limit)
-                merge_occurred = True
+            # Use new StructureService façade instead of legacy merge helpers
+            from orlando_toolkit.core.services.structure_service import StructureService
+            from orlando_toolkit.core.services.structure_models import StructureRules
 
-            # Then apply heading exclusions if needed
-            if self._excluded_styles and not self.context.metadata.get("merged_exclude_styles"):
-                merge_topics_by_styles(self.context, self._excluded_styles)
-                merge_occurred = True
-            
-            # Always apply section consolidation after any merge operation
-            # Reset the consolidation flag if we did any merges to ensure it runs
-            if merge_occurred:
-                self.context.metadata.pop("consolidated_sections", None)
-                
-            # Apply consolidation as final step regardless of what other operations were performed
-            consolidate_sections(self.context)
+            svc = StructureService()
+            rules = StructureRules(
+                max_depth=depth_limit,
+                excluded_styles=self._excluded_styles,
+                consolidate_sections=True,
+            )
+
+            # Apply structure rules and update context for preview
+            self.context = svc.apply_rules(self.context, rules)
 
             self._progress.stop()
             self._progress.grid_remove()

@@ -85,9 +85,8 @@ Analysis of the reference DITA archive has revealed a set of strict structural a
 
 ### 3. Topic File Structure (`.dita`)
 -   **Rule C.1 - Default Topic Type is `<concept>`**: All generated topic files must use `<concept>` as their root element.
--   **Rule C.2 - Root Element ID Must Match Filename**: The `id` of the root `<concept>` element must be identical to the topic's filename, excluding the `.dita` extension. This is critical for correct Ditamap linking.
--   **Rule C.3 - Universal Unique IDs**: Every single element within a topic file (including `<title>`, `<prolog>`, `<p>`, `<ul>`, `<li>`, etc.) must have a unique `id` attribute, preferably a generated UUID.
--   **Rule C.4 - Internal Prolog Metadata**: Each topic must contain a `<prolog>` element immediately after the `<title>`. This prolog must contain its own `<critdates>` and `<metadata>` elements.
+-   **Rule C.2 - Universal Unique IDs**: Every single element within a topic file (including `<title>`, `<prolog>`, `<p>`, `<ul>`, `<li>`, etc.) must have a unique `id` attribute, preferably a generated UUID.
+-   **Rule C.3 - Internal Prolog Metadata**: Each topic must contain a `<prolog>` element immediately after the `<title>`. This prolog must contain its own `<critdates>` and `<metadata>` elements.
 
 ---
 
