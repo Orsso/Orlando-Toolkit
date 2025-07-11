@@ -21,7 +21,7 @@ from datetime import datetime
 from lxml import etree as ET  # type: ignore
 
 from orlando_toolkit.core.models import DitaContext
-from orlando_toolkit.core.utils import generate_dita_id
+from orlando_toolkit.core.utils import generate_dita_id, normalize_topic_title
 from orlando_toolkit.core.generators import create_dita_table
 from orlando_toolkit.core.converter.helpers import (
     create_dita_concept,
@@ -185,7 +185,7 @@ def generate_dita_from_structure(
             # Add topicmeta for section
             topicmeta_ref = ET.SubElement(topichead, "topicmeta")
             navtitle_ref = ET.SubElement(topicmeta_ref, "navtitle")
-            navtitle_ref.text = node.text
+            navtitle_ref.text = normalize_topic_title(node.text)
             critdates_ref = ET.SubElement(topicmeta_ref, "critdates")
             ET.SubElement(critdates_ref, "created", date=metadata.get("revision_date"))
             ET.SubElement(critdates_ref, "revised", modified=metadata.get("revision_date"))
@@ -206,7 +206,7 @@ def generate_dita_from_structure(
                 module_id = module_file.replace(".dita", "")
                 
                 module_concept, module_conbody = create_dita_concept(
-                    node.text,  # Same title as section
+                    normalize_topic_title(node.text),  # Same title as section
                     module_id,
                     metadata.get("revision_date", datetime.now().strftime("%Y-%m-%d")),
                 )
@@ -223,7 +223,7 @@ def generate_dita_from_structure(
                 
                 tm = ET.SubElement(module_topicref, "topicmeta")
                 nt = ET.SubElement(tm, "navtitle")
-                nt.text = node.text
+                nt.text = normalize_topic_title(node.text)
                 
                 context.topics[module_file] = module_concept
             
@@ -236,7 +236,7 @@ def generate_dita_from_structure(
         else:  # node.role == "module"
             # Create module topic with content
             module_concept, module_conbody = create_dita_concept(
-                node.text,
+                normalize_topic_title(node.text),
                 topic_id,
                 metadata.get("revision_date", datetime.now().strftime("%Y-%m-%d")),
             )
@@ -255,7 +255,7 @@ def generate_dita_from_structure(
             # Add topicmeta
             topicmeta_ref = ET.SubElement(topicref, "topicmeta")
             navtitle_ref = ET.SubElement(topicmeta_ref, "navtitle")
-            navtitle_ref.text = node.text
+            navtitle_ref.text = normalize_topic_title(node.text)
             critdates_ref = ET.SubElement(topicmeta_ref, "critdates")
             ET.SubElement(critdates_ref, "created", date=metadata.get("revision_date"))
             ET.SubElement(critdates_ref, "revised", modified=metadata.get("revision_date"))

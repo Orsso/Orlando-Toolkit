@@ -20,6 +20,7 @@ from orlando_toolkit.core.utils import (
     slugify,
     generate_dita_id,
     convert_color_to_outputclass,
+    normalize_topic_title,
 )
 from orlando_toolkit.config.manager import ConfigManager
 
@@ -65,7 +66,7 @@ def create_dita_concept(title: str, topic_id: str, revision_date: str):
     """Return ``(<concept>, <conbody>)`` elements for a new DITA concept."""
     concept_root = ET.Element("concept", id=topic_id)
     title_elem = ET.SubElement(concept_root, "title")
-    title_elem.text = title
+    title_elem.text = normalize_topic_title(title)
 
     conbody = ET.SubElement(concept_root, "conbody")
     return concept_root, conbody

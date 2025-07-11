@@ -18,6 +18,7 @@ if False:  # TYPE_CHECKING pragma
 __all__ = [
     "slugify",
     "generate_dita_id",
+    "normalize_topic_title",
     "save_xml_file",
     "save_minified_xml_file",
     "convert_color_to_outputclass",
@@ -41,6 +42,27 @@ def slugify(text: str) -> str:
 def generate_dita_id() -> str:
     """Generate a globally unique ID suitable for DITA elements."""
     return f"id-{uuid.uuid4()}"
+
+
+def normalize_topic_title(title: str) -> str:
+    """Normalize topic titles to uppercase as per Orlando requirements.
+    
+    This function converts topic titles to uppercase to ensure consistent
+    formatting across all topic types including topichead and merged sub topics.
+    
+    Parameters
+    ----------
+    title
+        The original title text
+        
+    Returns
+    -------
+    str
+        The title converted to uppercase, with whitespace preserved
+    """
+    if not title:
+        return title
+    return title.upper()
 
 
 # ---------------------------------------------------------------------------

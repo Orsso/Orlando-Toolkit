@@ -11,7 +11,7 @@ from typing import Set
 from lxml import etree as ET  # type: ignore
 
 from orlando_toolkit.core.models import DitaContext  # noqa: F401
-from orlando_toolkit.core.utils import generate_dita_id
+from orlando_toolkit.core.utils import generate_dita_id, normalize_topic_title
 
 __all__ = [
     "merge_topics_by_titles", 
@@ -118,9 +118,11 @@ def merge_topics_by_titles(ctx: "DitaContext", exclude_titles: set[str]) -> None
                 title_txt = t_el.text if t_el is not None else ""
 
             if _clean_title(title_txt) in targets and ancestor_topic_el is not None and topic_el is not None:
-                # 1) Preserve heading paragraph
+                # 1) Preserve heading paragraph with bold and underline formatting
                 head_p = ET.Element("p", id=generate_dita_id())
-                head_p.text = title_txt.strip()
+                bold_elem = ET.SubElement(head_p, "b", id=generate_dita_id())
+                underline_elem = ET.SubElement(bold_elem, "u", id=generate_dita_id())
+                underline_elem.text = normalize_topic_title(title_txt.strip())
 
                 parent_body = ancestor_topic_el.find("conbody")
                 if parent_body is None:
@@ -163,7 +165,7 @@ def _new_topic_with_title(title_text: str) -> ET.Element:
     """Create a bare <concept> topic element with *title_text*."""
     topic_el = ET.Element("concept", id=generate_dita_id())
     title_el = ET.SubElement(topic_el, "title")
-    title_el.text = title_text
+    title_el.text = normalize_topic_title(title_text)
     # Body will be added later when content is copied
     return topic_el
 
@@ -171,21 +173,35 @@ def _new_topic_with_title(title_text: str) -> ET.Element:
 def _ensure_content_module(ctx: "DitaContext", section_tref: ET.Element) -> ET.Element:
     """Ensure there is a child *module* topic under *section_tref* and return its <concept> element.
 
-    If the first child already references a topic (module) we reuse it, otherwise we
-    create a new topic file, register it in ctx.topics and insert a new <topicref>.
+    First checks for existing topics with the same name to avoid creating duplicates.
+    If no suitable existing topic is found, creates a new content module.
     """
     
-    # For merge operations, always create a fresh content module
-    # Don't reuse existing topics that are meant to be merged
+    section_title_el = section_tref.find("topicmeta/navtitle")
+    title_txt = section_title_el.text if section_title_el is not None and section_title_el.text else "Untitled"
     
-    # Create a fresh content module
+    # Check if there's already an existing topic with the same name under this section
+    # that can be used as the merge target
+    for child in section_tref:
+        if child.tag == "topicref" and child.get("href"):
+            child_navtitle = child.find("topicmeta/navtitle")
+            if child_navtitle is not None and child_navtitle.text == title_txt:
+                # Found existing topic with same name - reuse it
+                child_href = child.get("href")
+                child_fname = child_href.split("/")[-1]
+                existing_topic = ctx.topics.get(child_fname)
+                if existing_topic is not None:
+                    # Update the level to match the section to prevent further merging
+                    module_level = str(int(section_tref.get("data-level", 1)))
+                    child.set("data-level", module_level)
+                    return existing_topic
+    
+    # No existing topic found - create a fresh content module
     # Derive filename similar to converter naming scheme: topic_<id>.dita
     new_id = generate_dita_id()
     fname = f"topic_{new_id}.dita"
 
     # Build topic element
-    section_title_el = section_tref.find("topicmeta/navtitle")
-    title_txt = section_title_el.text if section_title_el is not None and section_title_el.text else "Untitled"
     topic_el = _new_topic_with_title(title_txt)
 
     # Register in topics map
@@ -199,7 +215,7 @@ def _ensure_content_module(ctx: "DitaContext", section_tref: ET.Element) -> ET.E
     # Keep navtitle in sync
     nav = ET.SubElement(child_ref, "topicmeta")
     navtitle = ET.SubElement(nav, "navtitle")
-    navtitle.text = title_txt
+    navtitle.text = normalize_topic_title(title_txt)
 
     # Insert as first child to preserve order
     section_tref.insert(0, child_ref)
@@ -281,7 +297,9 @@ def merge_topics_unified(ctx: "DitaContext", depth_limit: int, exclude_style_map
                     if title_el is not None and title_el.text:
                         clean_title = " ".join(title_el.text.split())
                         head_p = ET.Element("p", id=generate_dita_id())
-                        head_p.text = clean_title
+                        bold_elem = ET.SubElement(head_p, "b", id=generate_dita_id())
+                        underline_elem = ET.SubElement(bold_elem, "u", id=generate_dita_id())
+                        underline_elem.text = normalize_topic_title(clean_title)
 
                         parent_body = ancestor_topic_el.find("conbody")
                         if parent_body is None:
@@ -325,12 +343,12 @@ def merge_topics_unified(ctx: "DitaContext", depth_limit: int, exclude_style_map
                                         if topic_el is not None:
                                             topic_title_el = topic_el.find("title")
                                             if topic_title_el is not None:
-                                                topic_title_el.text = section_title_el.text
+                                                topic_title_el.text = normalize_topic_title(section_title_el.text)
                                         
                                         # Update topicref navtitle
                                         child_navtitle = tref.find("topicmeta/navtitle")
                                         if child_navtitle is not None:
-                                            child_navtitle.text = section_title_el.text
+                                            child_navtitle.text = normalize_topic_title(section_title_el.text)
                                     
                                     # Copy section attributes to the child
                                     for attr, value in current.attrib.items():
@@ -372,7 +390,9 @@ def merge_topics_unified(ctx: "DitaContext", depth_limit: int, exclude_style_map
                         if title_el is not None and title_el.text:
                             clean_title = " ".join(title_el.text.split())
                             head_p = ET.Element("p", id=generate_dita_id())
-                            head_p.text = clean_title
+                            bold_elem = ET.SubElement(head_p, "b", id=generate_dita_id())
+                            underline_elem = ET.SubElement(bold_elem, "u", id=generate_dita_id())
+                            underline_elem.text = normalize_topic_title(clean_title)
                             tb = parent_module.find("conbody")
                             if tb is None:
                                 tb = ET.SubElement(parent_module, "conbody")
@@ -427,6 +447,9 @@ def merge_topics_unified(ctx: "DitaContext", depth_limit: int, exclude_style_map
     ctx.metadata["merged_depth"] = depth_limit
     if exclude_style_map:
         ctx.metadata["merged_exclude_styles"] = True
+
+    # Final step: disambiguate duplicate topic names across different sections
+    _disambiguate_duplicate_topic_names(ctx)
 
 
 def _collapse_redundant_sections(ctx: "DitaContext") -> None:
@@ -486,7 +509,7 @@ def _collapse_redundant_sections(ctx: "DitaContext") -> None:
             # Update content topic title to match section
             content_title_el = content_topic.find("title")
             if content_title_el is not None:
-                content_title_el.text = section_navtitle.text
+                content_title_el.text = normalize_topic_title(section_navtitle.text)
         
         # Copy section attributes to content child
         for attr, value in section_topichead.attrib.items():
@@ -559,12 +582,12 @@ def _promote_solo_child_safe(ctx: "DitaContext", section: ET.Element, child: ET.
                 if topic_el is not None:
                     topic_title_el = topic_el.find("title")
                     if topic_title_el is not None:
-                        topic_title_el.text = section_title_el.text
+                        topic_title_el.text = normalize_topic_title(section_title_el.text)
             
             # Update topicref navtitle
             child_navtitle = child.find("topicmeta/navtitle")
             if child_navtitle is not None:
-                child_navtitle.text = section_title_el.text
+                child_navtitle.text = normalize_topic_title(section_title_el.text)
         
         # Copy section attributes to child
         for attr, value in section.attrib.items():
@@ -594,12 +617,14 @@ def _create_content_module_safe(ctx: "DitaContext", section: ET.Element, topic_c
                 child_fname = child_href.split("/")[-1]
                 topic_el = ctx.topics.get(child_fname)
                 if topic_el is not None:
-                    # Copy title as paragraph
+                    # Copy title as paragraph with bold and underline formatting
                     title_el = topic_el.find("title")
                     if title_el is not None and title_el.text:
                         clean_title = " ".join(title_el.text.split())
                         head_p = ET.Element("p", id=generate_dita_id())
-                        head_p.text = clean_title
+                        bold_elem = ET.SubElement(head_p, "b", id=generate_dita_id())
+                        underline_elem = ET.SubElement(bold_elem, "u", id=generate_dita_id())
+                        underline_elem.text = normalize_topic_title(clean_title)
                         
                         content_body = content_module.find("conbody")
                         if content_body is None:
@@ -635,3 +660,21 @@ def _final_cleanup_orphaned_topics(ctx: "DitaContext") -> None:
     orphaned_topics = set(ctx.topics.keys()) - referenced_topics
     for fname in orphaned_topics:
         ctx.topics.pop(fname, None) 
+
+
+def _disambiguate_duplicate_topic_names(ctx: "DitaContext") -> None:
+    """Disambiguate topics that have identical names and could cause real confusion.
+    
+    This function is now disabled to prevent incorrect disambiguation of legitimate
+    topics that happen to share common functional names across different sections.
+    
+    Real duplicate conflicts are extremely rare in practice and the aggressive
+    disambiguation was causing more problems than it solved.
+    """
+    # DISABLED: The disambiguation logic was too aggressive and incorrectly
+    # treated legitimate different topics with common functional names
+    # (like "PARAMETRAGE SOFTWARE", "PREMIÈRE INSTALLATION") as duplicates.
+    # 
+    # In practice, true duplicates are rare and when they occur, users can
+    # handle them manually through the UI rename functionality.
+    pass 

@@ -14,6 +14,7 @@ import tkinter as tk
 from tkinter import ttk
 from lxml import etree as ET
 from orlando_toolkit.ui.dialogs import CenteredDialog
+from orlando_toolkit.core.utils import normalize_topic_title
 
 if False:  # TYPE_CHECKING pragma
     from orlando_toolkit.core.models import DitaContext
@@ -330,7 +331,7 @@ class StructureTab(ttk.Frame):
             tmp.flush()
             webbrowser.open_new_tab(pathlib.Path(tmp.name).as_uri())
 
-        ttk.Button(toolbar, text="Open HTML in Browser", command=_open_browser).pack(side="left", padx=5, pady=2)
+        ttk.Button(toolbar, text="Preview in Browser", command=_open_browser).pack(side="left", padx=5, pady=2)
 
         # Raw XML display
         raw_txt = _stxt.ScrolledText(preview_win, wrap="none")
@@ -369,6 +370,21 @@ class StructureTab(ttk.Frame):
         # Create context menu
         context_menu = tk.Menu(self, tearoff=0)
         
+        # Add info section for single selection
+        if len(selected_items) == 1:
+            tref = self._item_map.get(selected_items[0])
+            if tref:
+                # Extract information from the topicref/topichead element
+                level = tref.get("data-level", "1")
+                item_type = "Section" if tref.tag == "topichead" else "Module"
+                heading_style = tref.get("data-style", f"Heading {level}")
+                
+                # Add info items as disabled menu entries
+                context_menu.add_command(label=f"Level: {level}", state="disabled")
+                context_menu.add_command(label=f"Type: {item_type}", state="disabled")
+                context_menu.add_command(label=f"Style: {heading_style}", state="disabled")
+                context_menu.add_separator()
+        
         # Rename option (only for single selection)
         if len(selected_items) == 1:
             context_menu.add_command(label="Rename", command=self._rename_selected)
@@ -381,7 +397,7 @@ class StructureTab(ttk.Frame):
             context_menu.add_separator()
         
         # Delete option (always available)
-        delete_text = "Delete Permanently" if len(selected_items) == 1 else f"Delete {len(selected_items)} Topics"
+        delete_text = "Delete" if len(selected_items) == 1 else f"Delete {len(selected_items)} Topics"
         context_menu.add_command(label=delete_text, command=self._delete_selected_with_confirmation)
         
         # Show context menu
@@ -389,6 +405,8 @@ class StructureTab(ttk.Frame):
             context_menu.tk_popup(event.x_root, event.y_root)
         finally:
             context_menu.grab_release()
+
+
 
     def _can_merge_selection(self, selected_items):
         """Check if selected items can be merged (all in same section)."""
@@ -448,7 +466,7 @@ class StructureTab(ttk.Frame):
                 # Update navtitle in the ditamap (both topicref and topichead)
                 navtitle_el = tref.find("topicmeta/navtitle")
                 if navtitle_el is not None:
-                    navtitle_el.text = new_title
+                    navtitle_el.text = normalize_topic_title(new_title)
                 
                 # Update topic XML title if this is a topicref with content
                 href = tref.get("href")
@@ -458,7 +476,7 @@ class StructureTab(ttk.Frame):
                     if topic_el is not None:
                         title_el = topic_el.find("title")
                         if title_el is not None:
-                            title_el.text = new_title
+                            title_el.text = normalize_topic_title(new_title)
                 
                 # Keep pristine context in sync
                 if hasattr(self, "_orig_context") and self._orig_context:
@@ -648,11 +666,12 @@ class StructureTab(ttk.Frame):
         source_title_el = source_topic.find("title")
         source_body = source_topic.find("conbody")
         
-        # Add source title as emphasized text (Option B format)
+        # Add source title as emphasized text with bold and underline formatting
         if source_title_el is not None and source_title_el.text:
             title_p = ET.Element("p", id=generate_dita_id())
-            title_b = ET.SubElement(title_p, "b")
-            title_b.text = source_title_el.text.strip()
+            title_b = ET.SubElement(title_p, "b", id=generate_dita_id())
+            title_u = ET.SubElement(title_b, "u", id=generate_dita_id())
+            title_u.text = normalize_topic_title(source_title_el.text.strip())
             target_body.append(title_p)
         
         # Copy all content from source body
@@ -731,17 +750,8 @@ class StructureTab(ttk.Frame):
                         changed = True
                         selected_trefs.append(tref)
             elif direction == "promote":
-                grand = parent.getparent()
-                if grand is None:
-                    continue
-                insert_pos = list(grand).index(parent) + 1
-                for _, tref in forward_iter:
-                    parent.remove(tref)
-                    grand.insert(insert_pos, tref)
-                    insert_pos += 1
-                    changed = True
-                    selected_trefs.append(tref)
-                    _shift_levels(tref, -1)
+                # Skip processing - we'll handle promotion globally after all groups are collected
+                pass
             elif direction == "demote":
                 # Convert each demoted topic into its own section with content module
                 first_idx, tref_sample = items[0]
@@ -764,6 +774,121 @@ class StructureTab(ttk.Frame):
                         selected_trefs.append(tref)
                         # The content module is already at the right level (tref + 1)
                         # No need to shift levels for the section itself
+
+        # Handle promotion globally to preserve parent-child relationships
+        if direction == "promote" and by_parent:
+            # Collect all selected elements preserving document order
+            # Process parent groups in the order they appear in the document
+            all_selected_elements = []
+            
+            # Get all parents and sort them by their position in the document
+            parent_positions = []
+            for parent_group in by_parent.keys():
+                if parent_group.getparent() is not None:
+                    pos = list(parent_group.getparent()).index(parent_group)
+                    parent_positions.append((pos, parent_group))
+                else:
+                    parent_positions.append((0, parent_group))
+            
+            parent_positions.sort(key=lambda x: x[0])
+            
+            # Collect elements from each parent group in document order
+            for _, parent_group in parent_positions:
+                items_list = by_parent[parent_group]
+                items_list.sort(key=lambda x: x[0])  # Sort by original index within parent
+                for _, tref in items_list:
+                    all_selected_elements.append(tref)
+            
+            # Build global parent-child map within the selection
+            selected_set = set(all_selected_elements)
+            parent_child_map = {}
+            for tref in all_selected_elements:
+                children = []
+                for child in tref.xpath('.//topicref|.//topichead'):
+                    if child in selected_set and child.getparent() == tref:
+                        children.append(child)
+                if children:
+                    parent_child_map[tref] = children
+            
+            # Find root elements (selected elements that don't have selected parents)
+            root_elements = []
+            for tref in all_selected_elements:
+                tref_parent = tref.getparent()
+                if tref_parent not in selected_set:
+                    root_elements.append(tref)
+            
+            def promote_element_and_children(element, target_parent, target_pos):
+                """Promote an element and its selected children recursively."""
+                # Remove from current parent
+                current_parent = element.getparent()
+                if current_parent is not None:
+                    current_parent.remove(element)
+                
+                # Insert at target position
+                target_parent.insert(target_pos, element)
+                
+                # Adjust this element's level
+                current_level = int(element.get("data-level", 1))
+                element.set("data-level", str(max(1, current_level - 1)))
+                
+                # Adjust non-selected descendants
+                for descendant in element.xpath('.//topicref|.//topichead'):
+                    if descendant not in selected_set:
+                        desc_level = int(descendant.get("data-level", 1))
+                        descendant.set("data-level", str(max(1, desc_level - 1)))
+                
+                # Process selected children (they stay as children but get promoted)
+                if element in parent_child_map:
+                    for child in parent_child_map[element]:
+                        # Child stays under this element, just adjust its level
+                        child_level = int(child.get("data-level", 1))
+                        child.set("data-level", str(max(1, child_level - 1)))
+                        
+                        # Recursively handle child's selected descendants
+                        if child in parent_child_map:
+                            for grandchild in parent_child_map[child]:
+                                promote_element_and_children(grandchild, child, len(list(child)))
+                
+                return 1  # Return number of elements inserted
+            
+            # Group root elements by their original parent to handle insertion correctly
+            elements_by_original_parent = {}
+            for root_elem in root_elements:
+                original_parent = root_elem.getparent()
+                if original_parent is not None:
+                    if original_parent not in elements_by_original_parent:
+                        elements_by_original_parent[original_parent] = []
+                    elements_by_original_parent[original_parent].append(root_elem)
+            
+            # Process each parent group in document order to maintain relative positions
+            # Sort parent groups by their position in the document
+            sorted_parent_groups = []
+            for original_parent in elements_by_original_parent.keys():
+                grand = original_parent.getparent()
+                if grand is not None:
+                    pos = list(grand).index(original_parent)
+                    sorted_parent_groups.append((pos, original_parent))
+            
+            sorted_parent_groups.sort(key=lambda x: x[0])
+            
+            for pos, original_parent in sorted_parent_groups:
+                elements_to_promote = elements_by_original_parent[original_parent]
+                grand = original_parent.getparent()
+                if grand is not None:
+                    # Find insertion position after the original parent
+                    insert_pos = list(grand).index(original_parent) + 1
+                    
+                    # Promote elements in their original order within the parent
+                    for root_elem in elements_to_promote:
+                        promote_element_and_children(root_elem, grand, insert_pos)
+                        insert_pos += 1  # Next element goes after this one
+                        changed = True
+                        selected_trefs.append(root_elem)
+            
+            # Add all selected children to selected_trefs
+            for tref in all_selected_elements:
+                if tref not in selected_trefs:
+                    selected_trefs.append(tref)
 
         if changed:
             # Keep pristine context in sync so heading cache rebuild sees nodes
@@ -894,7 +1019,7 @@ class StructureTab(ttk.Frame):
                     # Update navtitle in ditamap
                     navtitle_el = tref.find("topicmeta/navtitle")
                     if navtitle_el is not None:
-                        navtitle_el.text = new_title
+                        navtitle_el.text = normalize_topic_title(new_title)
                     
                     # Update topic XML title if it has content
                     if href:
@@ -903,7 +1028,7 @@ class StructureTab(ttk.Frame):
                         if topic_el is not None:
                             title_el = topic_el.find("title")
                             if title_el is not None:
-                                title_el.text = new_title
+                                title_el.text = normalize_topic_title(new_title)
 
     # ------------------------------------------------------------------
     # Search helpers
