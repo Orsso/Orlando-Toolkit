@@ -420,8 +420,9 @@ class StructureTab(ttk.Frame):
         if not tref:
             return
         
-        # Get current title
-        current_title = self.tree.item(item, "text")
+        # Get current title directly from navtitle element (without section numbering)
+        navtitle_el = tref.find("topicmeta/navtitle")
+        current_title = navtitle_el.text.strip() if navtitle_el is not None and navtitle_el.text else "(untitled)"
         
         # Create rename dialog
         from orlando_toolkit.ui.dialogs import CenteredDialog
