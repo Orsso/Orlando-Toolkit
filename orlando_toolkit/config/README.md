@@ -2,6 +2,8 @@
 
 Loading YAML-based settings + user overrides.
 
+📖 **[← Back to Architecture Overview](../../docs/architecture_overview.md)**
+
 Use `ConfigManager()` and call:
 ```python
 cfg = ConfigManager()

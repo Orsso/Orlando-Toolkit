@@ -66,7 +66,14 @@ build.bat
 1. **Load Document** - Select your Word (.docx) file
 2. **Configure Metadata** - Set manual title, codes, and revision information
 3. **Review Images** - Adjust image naming and organization
-4. **Generate Package** - Export complete DITA archive as ZIP
+4. **Configure Structure** - Set topic depth, preview hierarchy, and perform structural editing
+5. **Generate Package** - Export complete DITA archive as ZIP
+
+The application provides three main tabs for comprehensive document control:
+
+- **Metadata Tab**: Configure document properties, revision tracking, and Orlando-specific metadata
+- **Images Tab**: Preview extracted images, configure naming conventions, and manage graphics
+- **Structure Tab**: Control topic hierarchy depth, preview document structure in real-time, and perform advanced structural editing operations
 
 **Output Structure:**
 - `DATA/topics/` - DITA concept files
@@ -84,10 +91,34 @@ orlando_toolkit/
 │   ├── converter/     # DOCX to DITA transformation
 │   ├── parser/        # Document analysis and extraction
 │   ├── generators/    # DITA XML builders
-│   └── services/      # High-level conversion orchestration
+│   ├── services/      # High-level conversion orchestration
+│   ├── merge.py       # Advanced topic merging engine
+│   └── preview/       # Real-time XML compilation and rendering
 └── ui/                # Tkinter GUI components
+    ├── metadata_tab.py  # Document metadata configuration
+    ├── image_tab.py     # Image management interface
+    └── structure_tab.py # Topic hierarchy and structural editing
 
 ```
+
+### Advanced Features
+
+**Topic Merge Engine**
+- Depth-based topic consolidation (configurable 1-9 levels)
+- Style-based exclusions for fine-grained control
+- Real-time preview of final document structure
+- Unified merge algorithm prevents content loss
+
+**Structural Editing**
+- Interactive tree view with move/promote/demote operations
+- Search and filter capabilities within document structure
+- Undo/redo support for all structural modifications
+- Heading filter to exclude specific Word styles
+
+**Preview System**
+- Real-time XML compilation and HTML rendering
+- Browser-based preview with embedded images
+- Raw XML inspection for validation and debugging
 
 ### Supported Elements
 - Paragraphs with alignment and styling
@@ -101,5 +132,5 @@ orlando_toolkit/
 
 ---
 
-For detailed architecture documentation, see `docs/architecture_overview.md`.
+For detailed architecture documentation, see **[Architecture Overview](docs/architecture_overview.md)**.
 
